@@ -1,0 +1,31 @@
+{
+  "items": [
+    {
+      "id": "discharge-warning",
+      "pt": "Sinais de alarme (ensino — não é a alta oficial)",
+      "tr": "Taburcu uyarıları (eğitim — resmi taburcu belgesi değildir)",
+      "en": "Warning signs (teaching — not the official discharge form)",
+      "bodyPt": "Febre, sangramento muito mais forte, dor de cabeça intensa, visão turva, falta de ar, dor no peito, bebé a mamar mal ou muito amarelo: contacte a unidade como no folheto do hospital. Este texto não substitui o documento de alta.",
+      "bodyTr": "Ateş, belirgin artan kanama, şiddetli baş ağrısı, bulanık görme, nefes darlığı, göğüs ağrısı, bebeğin kötü emmesi veya belirgin sarılık: hastane broşürüne göre üniteyle iletişime geçin. Bu metin taburcu belgesinin yerini tutmaz.",
+      "bodyEn": "Fever, much heavier bleeding, severe headache, blurred vision, shortness of breath, chest pain, baby feeding poorly or looking very yellow: contact the unit as on the hospital leaflet. This text does not replace the discharge document."
+    },
+    {
+      "id": "breastfeeding",
+      "pt": "Amamentação (ensino geral)",
+      "tr": "Emzirme (genel eğitim)",
+      "en": "Breastfeeding (general teaching)",
+      "bodyPt": "Mãos lavadas. Pega: boca bem aberta. Mama frequentemente. Dúvidas: enfermeira de aleitamento. Não dê água, chá ou mel ao recém-nascido salvo indicação da equipa.",
+      "bodyTr": "Eller yıkanır. Tutunma: ağız açık. Sık emzirin. Sorular: emzirme hemşiresi. Ekip söylemedikçe yenidoğana su, çay veya bal vermeyin.",
+      "bodyEn": "Wash hands. Latch: mouth wide open. Feed often. Questions: breastfeeding nurse. Do not give water, tea, or honey to the newborn unless the team directs."
+    },
+    {
+      "id": "safe-sleep",
+      "pt": "Sono seguro",
+      "tr": "Güvenli uyku",
+      "en": "Safe sleep",
+      "bodyPt": "Bebé de costas, superfície firme, sem almofadas soltas. Não fume no quarto.",
+      "bodyTr": "Sırtüstü, sert zemin, gevşek yastık yok. Odada sigara içmeyin.",
+      "bodyEn": "Baby on the back, firm surface, no loose pillows. Do not smoke in the room."
+    }
+  ]
+}

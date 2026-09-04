@@ -1,0 +1,14 @@
+node_modules
+dist
+.env
+.env.local
+.DS_Store
+*.log
+.vscode
+server/public-origin.txt
+server/.pinggy-known-hosts
+server/.tunnel-known-hosts
+tools/cloudflared.exe
+.DS_Store
+*.log
+.vscode

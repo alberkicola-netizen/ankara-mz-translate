@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#002855" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>TİKA Ankara University – Mozambique Translator</title>
+    <meta
+      name="description"
+      content="Real-time multilingual interpretation and communication platform connecting TİKA, Ankara University, and Mozambique. Turkish, Portuguese, and English."
+    />
+    <link rel="icon" href="/favicon.svg" />
+    <style>
+      html, body, #root { margin: 0; min-height: 100%; background: #f6f8fb; }
+      #boot-msg { font-family: system-ui, "Segoe UI", sans-serif; padding: 2rem 1.25rem; text-align: center; color: #002855; }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <p id="boot-msg">
+        A carregar o tradutor TİKA… Se esta mensagem não sair, abra o link HTTPS no browser (Chrome) e toque em Continuar se aparecer uma página do túnel.
+      </p>
+    </div>
+    <script>
+      setTimeout(function () {
+        var el = document.getElementById("boot-msg");
+        if (!el) return;
+        el.textContent =
+          "A aplicação não chegou a este telemóvel. No computador confirme que o servidor está ligado, depois abra o link HTTPS novo (não um endereço antigo do túnel) e limpe os dados do site.";
+      }, 10000);
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

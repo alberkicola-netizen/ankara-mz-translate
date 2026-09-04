@@ -1,0 +1,24 @@
+{
+  "terms": [
+    { "pt": "Observadora / observador", "tr": "Gözlemci", "en": "Observer (not the accountable nurse)" },
+    { "pt": "Preceptor", "tr": "Preseptör", "en": "Preceptor" },
+    { "pt": "Posto de enfermagem", "tr": "Hemşire bankosu", "en": "Nurses’ station" },
+    { "pt": "Contracção", "tr": "Kasılma", "en": "Contraction" },
+    { "pt": "Bolsa das águas", "tr": "Amniyon kesesi / suyun gelmesi", "en": "Membranes / waters" },
+    { "pt": "Monitor fetal", "tr": "Fetal monitör", "en": "Fetal monitor" },
+    { "pt": "Cesariana", "tr": "Sezaryen", "en": "Caesarean" },
+    { "pt": "Puerpério / puérpera", "tr": "Lohusa dönemi", "en": "Postnatal period / postnatal woman" },
+    { "pt": "Icterícia", "tr": "Sarılık", "en": "Jaundice" },
+    { "pt": "Coto umbilical", "tr": "Göbek güdüğü", "en": "Umbilical stump" },
+    { "pt": "Pega / latch", "tr": "Memeye tutunma", "en": "Latch" },
+    { "pt": "Incubadora", "tr": "Küvez", "en": "Incubator" },
+    { "pt": "Carro de emergência", "tr": "Acil arabası", "en": "Crash trolley" },
+    { "pt": "Consentimento informado", "tr": "Aydınlatılmış onam", "en": "Informed consent" },
+    { "pt": "Jejum", "tr": "Açlık (tetkik öncesi)", "en": "Fasting (NPO)" },
+    { "pt": "Isolamento / EPI", "tr": "İzolasyon / KKD", "en": "Isolation / PPE" },
+    { "pt": "Passagem de turno", "tr": "Nöbet teslimi", "en": "Handover" },
+    { "pt": "Alergia", "tr": "Alerji", "en": "Allergy" },
+    { "pt": "Eclâmpsia", "tr": "Eklampsi", "en": "Eclampsia" },
+    { "pt": "Hemorragia pós-parto", "tr": "Doğum sonu kanama", "en": "Postpartum haemorrhage" }
+  ]
+}

@@ -1,0 +1,93 @@
+import { useEffect, useState } from "react";
+
+/** Rede instável (telemóvel / túnel): timeout + retries, sem depender de navigator.onLine. */
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+export type ApiFetchInit = RequestInit & {
+  timeoutMs?: number;
+  retries?: number;
+};
+
+export async function apiFetch(input: RequestInfo | URL, init: ApiFetchInit = {}): Promise<Response> {
+  const { timeoutMs = 20_000, retries = 2, ...rest } = init;
+  let lastErr: unknown;
+  for (let i = 0; i <= retries; i++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    const parent = rest.signal;
+    const onAbort = () => ctrl.abort();
+    parent?.addEventListener("abort", onAbort);
+    try {
+      const res = await fetch(input, { ...rest, signal: ctrl.signal });
+      clearTimeout(timer);
+      parent?.removeEventListener("abort", onAbort);
+      if ((res.status >= 500 || res.status === 429) && i < retries) {
+        await sleep(400 * 2 ** i);
+        continue;
+      }
+      return res;
+    } catch (err) {
+      clearTimeout(timer);
+      parent?.removeEventListener("abort", onAbort);
+      lastErr = err;
+      if (i < retries) await sleep(400 * 2 ** i);
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("network");
+}
+
+export function classifyNetworkError(err: unknown, ui: { offlineErr: string; generateFailed: string; connServerDown: string }): string {
+  if (err instanceof Error && err.message === "not-configured") return err.message;
+  const msg = err instanceof Error ? err.message : "";
+  if (
+    msg === "network" ||
+    /failed to fetch|networkerror|abort|timeout|load failed/i.test(msg) ||
+    (err instanceof DOMException && err.name === "AbortError")
+  ) {
+    return ui.connServerDown;
+  }
+  if (/HTTP 503/.test(msg)) return ui.connServerDown;
+  return ui.generateFailed;
+}
+
+/** navigator.onLine só para o indicador visual — não bloqueia pedidos. */
+export function useOnline(): boolean {
+  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
+  useEffect(() => {
+    const up = () => setOnline(true);
+    const down = () => setOnline(false);
+    window.addEventListener("online", up);
+    window.addEventListener("offline", down);
+    return () => {
+      window.removeEventListener("online", up);
+      window.removeEventListener("offline", down);
+    };
+  }, []);
+  return online;
+}
+
+/** Ping real ao backend (o túnel Cloudflare pode morrer com o browser ainda "online"). */
+export function useServerReachable(): boolean {
+  const [up, setUp] = useState(true);
+  useEffect(() => {
+    let stop = false;
+    async function ping() {
+      try {
+        const res = await fetch("/api/rooms-meta", { cache: "no-store", signal: AbortSignal.timeout(8000) });
+        if (!stop) setUp(res.ok);
+      } catch {
+        if (!stop) setUp(false);
+      }
+    }
+    void ping();
+    const id = setInterval(() => void ping(), 12_000);
+    return () => {
+      stop = true;
+      clearInterval(id);
+    };
+  }, []);
+  return up;
+}
