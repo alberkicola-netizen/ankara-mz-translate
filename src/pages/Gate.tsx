@@ -18,9 +18,11 @@ export function Gate() {
 
   useEffect(() => {
     const linkPin = params.get("pin");
+    const nextRaw = params.get("next") || "/";
+    const next = nextRaw.startsWith("/") && !nextRaw.startsWith("//") ? nextRaw : "/";
     if (linkPin && linkPin.trim() === COHORT_PIN) {
       setUnlocked();
-      nav("/", { replace: true });
+      nav(next, { replace: true });
     } else if (linkPin) {
       setErr(true);
       setShowPin(true);

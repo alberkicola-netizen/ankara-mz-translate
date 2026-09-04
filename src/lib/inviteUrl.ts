@@ -42,6 +42,20 @@ export function isLoopbackHost(host: string): boolean {
   return host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "::1";
 }
 
+export function isTunnelHost(host: string): boolean {
+  return /(?:^|\.)(loca\.lt|trycloudflare\.com|ngrok(?:-free)?\.(?:app|io|dev)|pinggy\.link)$/i.test(host);
+}
+
+export function isPhoneBrowser(): boolean {
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+}
+
+/** PC deve criar o QR em localhost — o túnel HTTPS é só para o telemóvel. */
+export function pcAppUrl(path: string): string {
+  const next = path.startsWith("/") ? path : `/${path}`;
+  return `http://127.0.0.1:8787${next}`;
+}
+
 export function isLoopbackUrl(raw: string): boolean {
   try {
     return isLoopbackHost(new URL(raw).hostname);
@@ -66,17 +80,27 @@ function pickOrigin(candidates: Array<string | undefined>): string | null {
 }
 
 export async function fetchInviteOrigin(): Promise<InviteOrigin | null> {
-  try {
-    const res = await fetch("/api/invite-origin", {
-      cache: "no-store",
-      headers: { "bypass-tunnel-reminder": "1" },
-      signal: AbortSignal.timeout(6000),
-    });
-    if (!res.ok) return null;
-    return (await res.json()) as InviteOrigin;
-  } catch {
-    return null;
+  const bases = [""];
+  if (typeof window !== "undefined" && window.location.protocol !== "https:") {
+    if (window.location.hostname !== "127.0.0.1") bases.push("http://127.0.0.1:8787");
+    if (window.location.hostname !== "localhost") bases.push("http://localhost:8787");
   }
+  for (const base of [...new Set(bases)]) {
+    try {
+      const res = await fetch(`${base}/api/invite-origin`, {
+        cache: "no-store",
+        headers: { "bypass-tunnel-reminder": "1" },
+        signal: AbortSignal.timeout(6000),
+      });
+      if (!res.ok) continue;
+      const ctype = res.headers.get("content-type") || "";
+      if (!/json/i.test(ctype)) continue;
+      return (await res.json()) as InviteOrigin;
+    } catch {
+      /* try next */
+    }
+  }
+  return null;
 }
 
 async function phoneOrigin(): Promise<string> {

@@ -50,6 +50,53 @@ export async function apiFetch(input: RequestInfo | URL, init: ApiFetchInit = {}
   throw lastErr instanceof Error ? lastErr : new Error("network");
 }
 
+function apiBases(): string[] {
+  const bases = [""];
+  if (typeof window === "undefined") return bases;
+  // HTTPS (loca.lt) cannot call http://127.0.0.1 — the browser blocks mixed content.
+  if (window.location.protocol === "https:") return bases;
+  const host = window.location.hostname;
+  if (host !== "127.0.0.1") bases.push("http://127.0.0.1:8787");
+  if (host !== "localhost") bases.push("http://localhost:8787");
+  return [...new Set(bases)];
+}
+
+/** POST: tenta o site actual e, em HTTP no PC, o servidor local. */
+export async function postApi(path: string, body: unknown): Promise<Response> {
+  let last: unknown;
+  for (const base of apiBases()) {
+    try {
+      const res = await apiFetch(`${base}${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+        timeoutMs: 8_000,
+        retries: 1,
+      });
+      const ctype = res.headers.get("content-type") || "";
+      if (/html/i.test(ctype)) {
+        last = new Error("not-json");
+        continue;
+      }
+      return res;
+    } catch (err) {
+      last = err;
+    }
+  }
+  throw last instanceof Error ? last : new Error("network");
+}
+
+export async function postApiJson<T>(path: string, body: unknown): Promise<T> {
+  const res = await postApi(path, body);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const text = await res.text();
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error("not-json");
+  }
+}
+
 export function classifyNetworkError(err: unknown, ui: { offlineErr: string; generateFailed: string; connServerDown: string }): string {
   if (err instanceof Error && err.message === "not-configured") return err.message;
   const msg = err instanceof Error ? err.message : "";

@@ -11,8 +11,17 @@ import {
   type RoomPresence,
 } from "../lib/rooms";
 import { supabase } from "../lib/supabaseClient";
-import { fetchInviteOrigin, liveInviteUrl, phoneRoomUrl, type InviteOrigin } from "../lib/inviteUrl";
+import {
+  fetchInviteOrigin,
+  isPhoneBrowser,
+  isTunnelHost,
+  liveInviteUrl,
+  pcAppUrl,
+  phoneRoomUrl,
+  type InviteOrigin,
+} from "../lib/inviteUrl";
 import { InviteShare } from "../components/InviteShare";
+import { COHORT_PIN } from "../data/cohort";
 import type { SessionLang } from "../types";
 
 export function RoomNew() {
@@ -31,6 +40,11 @@ export function RoomNew() {
   const connRef = useRef<RoomConnection | null>(null);
 
   useEffect(() => {
+    if (isTunnelHost(window.location.hostname) && !isPhoneBrowser()) {
+      const next = encodeURIComponent("/room/new");
+      window.location.replace(`${pcAppUrl("/gate")}?pin=${encodeURIComponent(COHORT_PIN)}&next=${next}`);
+      return;
+    }
     void fetchInviteOrigin().then(setOrigin);
     return () => connRef.current?.close();
   }, []);
@@ -55,7 +69,13 @@ export function RoomNew() {
       };
       saveRoomCreds(me);
       let url = liveInviteUrl(r.publicUrl, `/join-room/${encodeURIComponent(r.roomId.toUpperCase())}`);
-      if (!url) url = await phoneRoomUrl(r.roomId);
+      if (!url) {
+        try {
+          url = await phoneRoomUrl(r.roomId);
+        } catch {
+          url = r.publicUrl || "";
+        }
+      }
       setRoomId(r.roomId);
       setLink(url);
       connRef.current = connectRoom({
@@ -119,7 +139,17 @@ export function RoomNew() {
           ))}
         </div>
         {origin && !origin.https ? <p className="banner">{origin.loopback ? ui.qrLocalhostWarn : ui.qrLanHint}</p> : null}
-        {error ? <p className="warn">{error}</p> : null}
+        {error ? (
+          <>
+            <p className="warn">{error}</p>
+            <a
+              className="btn wide"
+              href={`${pcAppUrl("/gate")}?pin=${encodeURIComponent(COHORT_PIN)}&next=${encodeURIComponent("/room/new")}`}
+            >
+              {ui.openOnThisPc}
+            </a>
+          </>
+        ) : null}
         <button className="btn primary wide" type="button" disabled={busy} onClick={() => void create()}>
           {busy ? <span className="spinner" /> : `📱 ${ui.generateQr}`}
         </button>

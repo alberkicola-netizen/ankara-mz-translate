@@ -1,6 +1,6 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "./supabaseClient";
-import { apiFetch } from "./net";
+import { apiFetch, postApi, postApiJson } from "./net";
 import type { SessionLang } from "../types";
 
 /** Mensagem no formato único usado pelo histórico e pelos broadcasts. */
@@ -87,14 +87,14 @@ type NewParticipant = { displayName: string; sourceLanguage: SessionLang; target
 export async function createRoom(
   p: NewParticipant,
 ): Promise<{ roomId: string; participantId: string; publicUrl: string }> {
-  const res = await apiFetch("/api/rooms", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(p),
-  });
-  if (res.status === 503) throw new Error("not-configured");
-  if (!res.ok) throw new Error(`create room: HTTP ${res.status}`);
-  return (await res.json()) as { roomId: string; participantId: string; publicUrl: string };
+  try {
+    const data = await postApiJson<{ roomId?: string; participantId?: string; publicUrl?: string }>("/api/rooms", p);
+    if (!data.roomId || !data.participantId) throw new Error("create room: bad payload");
+    return { roomId: data.roomId, participantId: data.participantId, publicUrl: data.publicUrl || "" };
+  } catch (err) {
+    if (err instanceof Error && /HTTP 503/.test(err.message)) throw new Error("not-configured");
+    throw err;
+  }
 }
 
 export async function getRoomInfo(roomId: string): Promise<RoomInfo | "gone"> {
@@ -108,11 +108,7 @@ export async function joinRoom(
   roomId: string,
   p: NewParticipant,
 ): Promise<{ participantId: string } | "full" | "gone"> {
-  const res = await apiFetch(`/api/rooms/${encodeURIComponent(roomId)}/join`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(p),
-  });
+  const res = await postApi(`/api/rooms/${encodeURIComponent(roomId)}/join`, p);
   if (res.status === 409) return "full";
   if (res.status === 404 || res.status === 410 || res.status === 503) return "gone";
   if (!res.ok) throw new Error(`join room: HTTP ${res.status}`);

@@ -126,6 +126,16 @@ function roomsSetup(translate) {
 export function createApp() {
   const app = express();
   app.set("trust proxy", true);
+  app.use((req, res, next) => {
+    const origin = String(req.headers.origin || "");
+    if (origin) res.setHeader("Access-Control-Allow-Origin", origin);
+    else res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, bypass-tunnel-reminder");
+    if (req.method === "OPTIONS") return res.sendStatus(204);
+    next();
+  });
   app.use("/api", (_req, res, next) => {
     res.setHeader("Cache-Control", "no-store");
     next();

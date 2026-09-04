@@ -13,8 +13,17 @@ import {
   type SessionConnection,
 } from "../lib/session";
 import type { SessionLang } from "../types";
-import { fetchInviteOrigin, liveInviteUrl, phoneJoinUrl, type InviteOrigin } from "../lib/inviteUrl";
+import {
+  fetchInviteOrigin,
+  isPhoneBrowser,
+  isTunnelHost,
+  liveInviteUrl,
+  pcAppUrl,
+  phoneJoinUrl,
+  type InviteOrigin,
+} from "../lib/inviteUrl";
 import { InviteShare } from "../components/InviteShare";
+import { COHORT_PIN } from "../data/cohort";
 
 export function SessionNew() {
   const { lang } = useUiLang();
@@ -29,6 +38,11 @@ export function SessionNew() {
   const connRef = useRef<SessionConnection | null>(null);
 
   useEffect(() => {
+    if (isTunnelHost(window.location.hostname) && !isPhoneBrowser()) {
+      const next = encodeURIComponent("/session/new");
+      window.location.replace(`${pcAppUrl("/gate")}?pin=${encodeURIComponent(COHORT_PIN)}&next=${next}`);
+      return;
+    }
     void fetchInviteOrigin().then(setOrigin);
     return () => connRef.current?.close();
   }, []);
@@ -40,7 +54,13 @@ export function SessionNew() {
       const s = await createSession(myLang);
       saveCreds({ code: s.code, token: s.token, role: "a", myLang, peerLang: null });
       let url = liveInviteUrl(s.publicUrl, `/join/${encodeURIComponent(s.code.toUpperCase())}`);
-      if (!url) url = await phoneJoinUrl(s.code);
+      if (!url) {
+        try {
+          url = await phoneJoinUrl(s.code);
+        } catch {
+          url = s.publicUrl || "";
+        }
+      }
       setCode(s.code);
       setLink(url);
       connRef.current = connectSession({
@@ -83,7 +103,17 @@ export function SessionNew() {
           ))}
         </div>
         {origin && !origin.https ? <p className="banner">{origin.loopback ? ui.qrLocalhostWarn : ui.qrLanHint}</p> : null}
-        {error ? <p className="warn">{error}</p> : null}
+        {error ? (
+          <>
+            <p className="warn">{error}</p>
+            <a
+              className="btn wide"
+              href={`${pcAppUrl("/gate")}?pin=${encodeURIComponent(COHORT_PIN)}&next=${encodeURIComponent("/session/new")}`}
+            >
+              {ui.openOnThisPc}
+            </a>
+          </>
+        ) : null}
         <button className="btn primary wide" type="button" disabled={busy} onClick={() => void generate()}>
           {busy ? <span className="spinner" /> : `📱 ${ui.generateQr}`}
         </button>

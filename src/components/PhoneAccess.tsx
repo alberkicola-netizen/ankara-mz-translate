@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { COHORT_PIN } from "../data/cohort";
-import { fetchInviteOrigin } from "../lib/inviteUrl";
+import { fetchInviteOrigin, pcAppUrl } from "../lib/inviteUrl";
 import { UI } from "../lib/i18n";
 import { useUiLang } from "../lib/ui-lang";
 
@@ -40,6 +40,8 @@ export function PhoneAccess() {
   return (
     <article className="card" style={{ marginBottom: "1.1rem", border: "2px solid var(--navy)" }}>
       <h2>📱 {ui.phoneBoxTitle}</h2>
+      <p className="muted">{ui.phoneBoxPc}</p>
+      <p style={{ wordBreak: "break-all", fontWeight: 600 }}>{pcAppUrl(`/?pin=${encodeURIComponent(COHORT_PIN)}`)}</p>
       {httpsUrl ? (
         <>
           <p className="muted">{ui.phoneBoxHttps}</p>

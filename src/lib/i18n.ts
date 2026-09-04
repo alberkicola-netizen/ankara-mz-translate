@@ -81,7 +81,9 @@ export const UI = {
     connOffline: "Pronto",
     connServerDown: "A traduzir pelos cartões aprovados.",
     generateFailed:
-      "O QR não foi criado. Recarregue a página e toque outra vez em Gerar QR. Se vir «Tunnel website ahead», toque em Continue primeiro.",
+      "O QR não foi criado. Neste computador abra http://127.0.0.1:8787 e toque outra vez em Gerar QR. No telemóvel, se vir «Tunnel website ahead», toque em Continue.",
+    openOnThisPc: "Abrir neste PC (localhost)",
+    phoneBoxPc: "Neste computador use sempre localhost para criar o QR. O link HTTPS é só para o telemóvel.",
     aiActive: "IA de Tradução: Ativa",
     copyText: "Copiar",
     clearHistory: "Apagar histórico",
@@ -305,7 +307,9 @@ export const UI = {
     connOffline: "Hazır",
     connServerDown: "Onaylı kartlarla çeviri.",
     generateFailed:
-      "QR oluşturulamadı. Sayfayı yenileyip tekrar Gerar QR'a dokunun. «Tunnel website ahead» görürseniz önce Continue'a basın.",
+      "QR oluşturulamadı. Bu bilgisayarda http://127.0.0.1:8787 adresini açıp tekrar QR oluşturun. Telefonda «Tunnel website ahead» görürseniz önce Continue'a basın.",
+    openOnThisPc: "Bu bilgisayarda aç (localhost)",
+    phoneBoxPc: "QR'ı bu bilgisayarda her zaman localhost'ta oluşturun. HTTPS linki yalnızca telefon içindir.",
     aiActive: "Çeviri Yapay Zekâsı: Etkin",
     copyText: "Kopyala",
     clearHistory: "Geçmişi sil",
@@ -529,7 +533,9 @@ export const UI = {
     connOffline: "Ready",
     connServerDown: "Translating with approved cards.",
     generateFailed:
-      "The QR was not created. Reload and tap Generate QR again. If you see “Tunnel website ahead”, tap Continue first.",
+      "The QR was not created. On this computer open http://127.0.0.1:8787 and tap Generate QR again. On the phone, if you see “Tunnel website ahead”, tap Continue first.",
+    openOnThisPc: "Open on this PC (localhost)",
+    phoneBoxPc: "On this computer always create the QR on localhost. The HTTPS link is for the phone only.",
     aiActive: "Translation AI: Active",
     copyText: "Copy",
     clearHistory: "Clear history",
