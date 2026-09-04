@@ -1,14 +1,11 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { UI } from "../lib/i18n";
 import { useUiLang } from "../lib/ui-lang";
-import { useServerReachable } from "../lib/net";
 import { LangMenu } from "./LangMenu";
 
 export function Layout() {
   const { lang } = useUiLang();
   const ui = UI[lang];
-  const serverUp = useServerReachable();
-  const ok = serverUp;
 
   const side = [
     { to: "/", label: ui.home, icon: "🏠", end: true },
@@ -53,9 +50,9 @@ export function Layout() {
             <span className="lp-mark uni">ANKARA UNIVERSITY</span>
             <span className="lp-mark app">{ui.brandName}</span>
           </div>
-          <span className={ok ? "conn" : "conn off"}>
+          <span className="conn">
             <span className="dot" />
-            {ok ? ui.connStable : ui.connServerDown}
+            {ui.connStable}
           </span>
           <LangMenu />
           <NavLink to="/more" className="iconbtn" aria-label={ui.settings}>

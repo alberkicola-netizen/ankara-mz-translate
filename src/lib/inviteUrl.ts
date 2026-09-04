@@ -30,6 +30,14 @@ export async function phoneUrl(pathAndQuery: string): Promise<string> {
   return `${origin}${pathAndQuery}`;
 }
 
+/** QR: usar o site que o anfitrião já tem aberto — nunca um túnel antigo do servidor. */
+export function liveInviteUrl(serverPublicUrl: string | undefined, path: string): string {
+  const here = window.location.origin;
+  if (!isLoopbackHost(window.location.hostname)) return `${here}${path}`;
+  if (serverPublicUrl && !isLoopbackUrl(serverPublicUrl)) return `${new URL(serverPublicUrl).origin}${path}`;
+  return "";
+}
+
 export function isLoopbackHost(host: string): boolean {
   return host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "::1";
 }
@@ -59,7 +67,11 @@ function pickOrigin(candidates: Array<string | undefined>): string | null {
 
 export async function fetchInviteOrigin(): Promise<InviteOrigin | null> {
   try {
-    const res = await fetch("/api/invite-origin", { cache: "no-store", signal: AbortSignal.timeout(6000) });
+    const res = await fetch("/api/invite-origin", {
+      cache: "no-store",
+      headers: { "bypass-tunnel-reminder": "1" },
+      signal: AbortSignal.timeout(6000),
+    });
     if (!res.ok) return null;
     return (await res.json()) as InviteOrigin;
   } catch {

@@ -11,6 +11,12 @@ export type ApiFetchInit = RequestInit & {
   retries?: number;
 };
 
+function withTunnelHeaders(init: RequestInit): Headers {
+  const headers = new Headers(init.headers);
+  headers.set("bypass-tunnel-reminder", "1");
+  return headers;
+}
+
 export async function apiFetch(input: RequestInfo | URL, init: ApiFetchInit = {}): Promise<Response> {
   const { timeoutMs = 20_000, retries = 2, ...rest } = init;
   let lastErr: unknown;
@@ -21,9 +27,14 @@ export async function apiFetch(input: RequestInfo | URL, init: ApiFetchInit = {}
     const onAbort = () => ctrl.abort();
     parent?.addEventListener("abort", onAbort);
     try {
-      const res = await fetch(input, { ...rest, signal: ctrl.signal });
+      const res = await fetch(input, { ...rest, headers: withTunnelHeaders(rest), signal: ctrl.signal });
       clearTimeout(timer);
       parent?.removeEventListener("abort", onAbort);
+      const ctype = res.headers.get("content-type") || "";
+      if (res.ok && /text\/html/i.test(ctype) && i < retries) {
+        await sleep(400 * 2 ** i);
+        continue;
+      }
       if ((res.status >= 500 || res.status === 429) && i < retries) {
         await sleep(400 * 2 ** i);
         continue;

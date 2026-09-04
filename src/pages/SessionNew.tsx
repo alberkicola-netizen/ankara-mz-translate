@@ -13,8 +13,7 @@ import {
   type SessionConnection,
 } from "../lib/session";
 import type { SessionLang } from "../types";
-import { fetchInviteOrigin, isLoopbackUrl, phoneJoinUrl, type InviteOrigin } from "../lib/inviteUrl";
-import { classifyNetworkError } from "../lib/net";
+import { fetchInviteOrigin, liveInviteUrl, phoneJoinUrl, type InviteOrigin } from "../lib/inviteUrl";
 import { InviteShare } from "../components/InviteShare";
 
 export function SessionNew() {
@@ -40,10 +39,8 @@ export function SessionNew() {
     try {
       const s = await createSession(myLang);
       saveCreds({ code: s.code, token: s.token, role: "a", myLang, peerLang: null });
-      let url = s.publicUrl || "";
-      if (!url || isLoopbackUrl(url)) {
-        url = await phoneJoinUrl(s.code);
-      }
+      let url = liveInviteUrl(s.publicUrl, `/join/${encodeURIComponent(s.code.toUpperCase())}`);
+      if (!url) url = await phoneJoinUrl(s.code);
       setCode(s.code);
       setLink(url);
       connRef.current = connectSession({
@@ -60,8 +57,8 @@ export function SessionNew() {
         onConnected: () => undefined,
         onDisconnected: () => undefined,
       });
-    } catch (e) {
-      setError(classifyNetworkError(e, ui));
+    } catch {
+      setError(ui.generateFailed);
     } finally {
       setBusy(false);
     }

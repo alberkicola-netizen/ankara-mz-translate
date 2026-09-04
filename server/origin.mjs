@@ -74,11 +74,13 @@ export function forwardedOrigin(req) {
 
 /**
  * Origem que a câmara do telemóvel consegue abrir.
- * HTTPS público (túnel fresco) > host reencaminhado > LAN com a porta certa.
+ * O Host HTTPS deste pedido (túnel vivo) ganha a um ficheiro/túnel antigo.
  * Nunca devolve localhost.
  */
 export function originFor(req) {
-  return configuredPublicOrigin() || forwardedOrigin(req) || lanOrigin(req);
+  const live = forwardedOrigin(req);
+  if (live && live.startsWith("https:")) return live;
+  return configuredPublicOrigin() || live || lanOrigin(req);
 }
 
 export function describeOrigin(origin) {

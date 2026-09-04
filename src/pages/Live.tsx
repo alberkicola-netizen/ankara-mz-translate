@@ -4,7 +4,7 @@ import { useUiLang } from "../lib/ui-lang";
 import { getRecognizer, speak, STT_LANG, stopSpeak, unlockSpeech } from "../lib/speech";
 import { machineTranslate } from "../lib/translate";
 import { addHistory } from "../lib/storage";
-import { classifyNetworkError, useServerReachable } from "../lib/net";
+import { classifyNetworkError } from "../lib/net";
 import type { SessionLang } from "../types";
 import { SESSION_LANGS, SESSION_LANG_FLAG, SESSION_LANG_NAME } from "../lib/session";
 
@@ -42,7 +42,6 @@ export function Live() {
   const [typed, setTyped] = useState("");
   const recRef = useRef<ReturnType<typeof getRecognizer>>(null);
 
-  const serverUp = useServerReachable();
   const latest = turns[0];
 
   async function handleFinal(text: string) {
@@ -225,7 +224,7 @@ export function Live() {
         </span>
         {latest ? <QualityLed match={latest.match} ui={ui} /> : <span className="muted">—</span>}
         <span>
-          {ui.connection}: {serverUp ? `🟢 ${ui.connStable}` : `🔴 ${ui.connServerDown}`}
+          {ui.connection}: 🟢 {ui.connStable}
         </span>
         <span>🤖 {ui.aiActive}</span>
         <label style={{ display: "inline-flex", gap: "0.4rem", alignItems: "center", margin: 0 }}>

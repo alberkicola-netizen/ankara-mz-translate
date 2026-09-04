@@ -11,8 +11,7 @@ import {
   type RoomPresence,
 } from "../lib/rooms";
 import { supabase } from "../lib/supabaseClient";
-import { fetchInviteOrigin, isLoopbackUrl, phoneRoomUrl, type InviteOrigin } from "../lib/inviteUrl";
-import { classifyNetworkError } from "../lib/net";
+import { fetchInviteOrigin, liveInviteUrl, phoneRoomUrl, type InviteOrigin } from "../lib/inviteUrl";
 import { InviteShare } from "../components/InviteShare";
 import type { SessionLang } from "../types";
 
@@ -55,10 +54,8 @@ export function RoomNew() {
         isHost: true,
       };
       saveRoomCreds(me);
-      let url = r.publicUrl || "";
-      if (!url || isLoopbackUrl(url)) {
-        url = await phoneRoomUrl(r.roomId);
-      }
+      let url = liveInviteUrl(r.publicUrl, `/join-room/${encodeURIComponent(r.roomId.toUpperCase())}`);
+      if (!url) url = await phoneRoomUrl(r.roomId);
       setRoomId(r.roomId);
       setLink(url);
       connRef.current = connectRoom({
@@ -76,11 +73,7 @@ export function RoomNew() {
         onStatus: () => undefined,
       });
     } catch (e) {
-      setError(
-        e instanceof Error && e.message === "not-configured"
-          ? ui.roomsOff
-          : classifyNetworkError(e, ui),
-      );
+      setError(e instanceof Error && e.message === "not-configured" ? ui.roomsOff : ui.generateFailed);
     } finally {
       setBusy(false);
     }

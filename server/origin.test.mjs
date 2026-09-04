@@ -38,6 +38,18 @@ test("originFor nunca devolve localhost quando há LAN/túnel", () => {
   else process.env.PUBLIC_ORIGIN = prev;
 });
 
+test("originFor prefere o Host HTTPS do pedido a um PUBLIC_ORIGIN morto", () => {
+  const prev = process.env.PUBLIC_ORIGIN;
+  process.env.PUBLIC_ORIGIN = "https://dead.example.test";
+  const origin = originFor({
+    headers: { host: "brave-crews-sin.loca.lt", "x-forwarded-proto": "https" },
+    protocol: "http",
+  });
+  assert.equal(origin, "https://brave-crews-sin.loca.lt");
+  if (prev === undefined) delete process.env.PUBLIC_ORIGIN;
+  else process.env.PUBLIC_ORIGIN = prev;
+});
+
 test("describeOrigin marca ligações de telemóvel", () => {
   assert.equal(describeOrigin("https://x.trycloudflare.com").phoneReady, true);
   assert.equal(describeOrigin("https://x.trycloudflare.com").phoneReadyAnywhere, true);
