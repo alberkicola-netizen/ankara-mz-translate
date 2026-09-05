@@ -17,14 +17,14 @@ import {
   fetchInviteOrigin,
   isPhoneBrowser,
   isTunnelHost,
-  liveInviteUrl,
   pcAppUrl,
-  phoneJoinUrl,
+  publicInviteUrl,
   type InviteOrigin,
 } from "../lib/inviteUrl";
 import { InviteShare } from "../components/InviteShare";
 import { COHORT_PIN } from "../data/cohort";
 import { getApi } from "../lib/net";
+import { cloudSessionsEnabled } from "../lib/pairCloud";
 
 export function SessionNew() {
   const { lang } = useUiLang();
@@ -45,11 +45,13 @@ export function SessionNew() {
       return;
     }
     void fetchInviteOrigin().then(setOrigin);
-    void getApi("/api/rooms-meta")
-      .then((r) => {
-        if (!r.ok) setError(ui.connServerOff);
-      })
-      .catch(() => setError(ui.connServerOff));
+    if (!cloudSessionsEnabled()) {
+      void getApi("/api/rooms-meta")
+        .then((r) => {
+          if (!r.ok) setError(ui.connServerOff);
+        })
+        .catch(() => setError(ui.connServerOff));
+    }
     return () => connRef.current?.close();
   }, [ui.connServerOff]);
 
@@ -59,16 +61,8 @@ export function SessionNew() {
     try {
       const s = await createSession(myLang);
       saveCreds({ code: s.code, token: s.token, role: "a", myLang, peerLang: null });
-      let url = liveInviteUrl(s.publicUrl, `/join/${encodeURIComponent(s.code.toUpperCase())}`);
-      if (!url) {
-        try {
-          url = await phoneJoinUrl(s.code);
-        } catch {
-          url = s.publicUrl || "";
-        }
-      }
       setCode(s.code);
-      setLink(url);
+      setLink(publicInviteUrl(`/join/${encodeURIComponent(s.code.toUpperCase())}`));
       connRef.current = connectSession({
         code: s.code,
         token: s.token,

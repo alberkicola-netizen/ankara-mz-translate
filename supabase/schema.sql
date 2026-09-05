@@ -41,3 +41,38 @@ create index if not exists idx_utterances_room_target
 alter table rooms enable row level security;
 alter table participants enable row level security;
 alter table utterances enable row level security;
+
+-- Sessões a dois: o telemóvel e a Vercel leem/escrevem aqui (sem túnel do PC).
+create table if not exists pair_sessions (
+  code text primary key,
+  status text not null default 'waiting',
+  a_token text not null,
+  a_lang text not null,
+  b_token text,
+  b_lang text,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+
+alter table pair_sessions enable row level security;
+
+drop policy if exists pair_sessions_read on pair_sessions;
+drop policy if exists pair_sessions_insert on pair_sessions;
+drop policy if exists pair_sessions_update on pair_sessions;
+
+create policy pair_sessions_read on pair_sessions
+  for select using (expires_at > now());
+create policy pair_sessions_insert on pair_sessions
+  for insert with check (expires_at > now());
+create policy pair_sessions_update on pair_sessions
+  for update using (expires_at > now());
+
+-- Leitura/criação pública das sessões a dois (sem texto clínico).
+drop policy if exists rooms_public_read on rooms;
+create policy rooms_public_read on rooms for select using (true);
+drop policy if exists rooms_public_insert on rooms;
+create policy rooms_public_insert on rooms for insert with check (max_participants <= 2);
+drop policy if exists participants_public_read on participants;
+create policy participants_public_read on participants for select using (true);
+drop policy if exists participants_public_insert on participants;
+create policy participants_public_insert on participants for insert with check (true);

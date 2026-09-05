@@ -15,9 +15,8 @@ import {
   fetchInviteOrigin,
   isPhoneBrowser,
   isTunnelHost,
-  liveInviteUrl,
   pcAppUrl,
-  phoneRoomUrl,
+  publicInviteUrl,
   type InviteOrigin,
 } from "../lib/inviteUrl";
 import { InviteShare } from "../components/InviteShare";
@@ -47,11 +46,13 @@ export function RoomNew() {
       return;
     }
     void fetchInviteOrigin().then(setOrigin);
-    void getApi("/api/rooms-meta")
-      .then((r) => {
-        if (!r.ok) setError(ui.connServerOff);
-      })
-      .catch(() => setError(ui.connServerOff));
+    if (!supabase) {
+      void getApi("/api/rooms-meta")
+        .then((r) => {
+          if (!r.ok) setError(ui.connServerOff);
+        })
+        .catch(() => setError(ui.connServerOff));
+    }
     return () => connRef.current?.close();
   }, [ui.connServerOff]);
 
@@ -74,16 +75,8 @@ export function RoomNew() {
         isHost: true,
       };
       saveRoomCreds(me);
-      let url = liveInviteUrl(r.publicUrl, `/join-room/${encodeURIComponent(r.roomId.toUpperCase())}`);
-      if (!url) {
-        try {
-          url = await phoneRoomUrl(r.roomId);
-        } catch {
-          url = r.publicUrl || "";
-        }
-      }
       setRoomId(r.roomId);
-      setLink(url);
+      setLink(publicInviteUrl(`/join-room/${encodeURIComponent(r.roomId.toUpperCase())}`));
       connRef.current = connectRoom({
         roomId: r.roomId,
         me: {

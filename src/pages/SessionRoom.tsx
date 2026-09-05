@@ -83,7 +83,10 @@ function Room({
       code,
       token,
       onMessage: handleMsg,
-      onConnected: () => setConnected(true),
+      onConnected: () => {
+        setConnected(true);
+        conn.send({ type: "joined", lang: myLang });
+      },
       onDisconnected: () => setConnected(false),
     });
     connRef.current = conn;

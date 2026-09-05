@@ -1,5 +1,7 @@
 import type { SessionLang } from "../types";
 import { apiFetch, getApi, postApi, postApiJson } from "./net";
+import { supabase } from "./supabaseClient";
+import { cloudCreate, cloudGet, cloudJoin, cloudSessionsEnabled } from "./pairCloud";
 
 export const SESSION_LANGS: SessionLang[] = ["pt", "pt-BR", "pt-PT", "pt-AO", "tr", "en", "fr"];
 
@@ -51,6 +53,14 @@ export function clearCreds(): void {
 }
 
 export async function createSession(lang: SessionLang): Promise<{ code: string; token: string; publicUrl?: string }> {
+  if (cloudSessionsEnabled()) {
+    try {
+      const cloud = await cloudCreate(lang);
+      if (cloud) return cloud;
+    } catch {
+      /* API / memória */
+    }
+  }
   try {
     const data = await postApiJson<{ code?: string; token?: string; publicUrl?: string }>("/api/session", { lang });
     if (data.code && data.token) return { code: data.code, token: data.token, publicUrl: data.publicUrl };
@@ -65,6 +75,14 @@ export async function createSession(lang: SessionLang): Promise<{ code: string; 
 }
 
 export async function getSession(code: string): Promise<{ creatorLang: SessionLang; status: string } | null> {
+  if (cloudSessionsEnabled()) {
+    try {
+      const cloud = await cloudGet(code);
+      if (cloud) return cloud;
+    } catch {
+      /* API */
+    }
+  }
   const res = await apiFetch(`/api/session/${encodeURIComponent(code)}`, { retries: 1 });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`get: HTTP ${res.status}`);
@@ -75,6 +93,15 @@ export async function joinSession(
   code: string,
   lang: SessionLang,
 ): Promise<{ token: string; creatorLang: SessionLang } | "full" | "gone"> {
+  if (cloudSessionsEnabled()) {
+    try {
+      const cloud = await cloudJoin(code, lang);
+      if (cloud === "full" || cloud === "gone") return cloud;
+      if (cloud) return cloud;
+    } catch {
+      /* API */
+    }
+  }
   const res = await postApi(`/api/session/${encodeURIComponent(code)}/join`, { lang });
   if (res.status === 409) return "full";
   if (res.status === 404) return "gone";
@@ -99,8 +126,53 @@ export type SessionConnection = {
   close: () => void;
 };
 
-/** WebSocket with automatic reconnection, heartbeat (túneis HTTPS) and online-event retry. */
+/** Realtime na Vercel/telemóvel; WebSocket só no servidor local. */
 export function connectSession(opts: {
+  code: string;
+  token: string;
+  onMessage: (msg: WsMsg) => void;
+  onConnected: () => void;
+  onDisconnected: () => void;
+}): SessionConnection {
+  if (supabase) return connectSessionRealtime(opts);
+  return connectSessionWs(opts);
+}
+
+function connectSessionRealtime(opts: {
+  code: string;
+  token: string;
+  onMessage: (msg: WsMsg) => void;
+  onConnected: () => void;
+  onDisconnected: () => void;
+}): SessionConnection {
+  let closed = false;
+  const topic = `session:${opts.code.toUpperCase()}`;
+  const ch = supabase!.channel(topic, { config: { broadcast: { ack: false } } });
+  ch.on("broadcast", { event: "sig" }, ({ payload }) => {
+    const msg = payload as WsMsg & { token?: string };
+    if (!msg || msg.token === opts.token) return;
+    const { token: _t, ...rest } = msg as WsMsg & { token?: string };
+    if (rest.type === "pong" || rest.type === "ping") return;
+    opts.onMessage(rest);
+  });
+  ch.subscribe((status) => {
+    if (closed) return;
+    if (status === "SUBSCRIBED") opts.onConnected();
+    if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") opts.onDisconnected();
+  });
+  return {
+    send: (msg) => {
+      if (closed) return;
+      void ch.send({ type: "broadcast", event: "sig", payload: { ...msg, token: opts.token } });
+    },
+    close: () => {
+      closed = true;
+      void supabase!.removeChannel(ch);
+    },
+  };
+}
+
+function connectSessionWs(opts: {
   code: string;
   token: string;
   onMessage: (msg: WsMsg) => void;

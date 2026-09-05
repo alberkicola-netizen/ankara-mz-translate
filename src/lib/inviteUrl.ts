@@ -1,3 +1,14 @@
+/** Site HTTPS estável (Vercel). O QR do telemóvel NUNCA usa localhost nem túnel morto. */
+export const PUBLIC_SITE = String(
+  (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_PUBLIC_SITE) ||
+    "https://ankara-mz-translate.vercel.app",
+).replace(/\/$/, "");
+
+export function publicInviteUrl(path: string): string {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return `${PUBLIC_SITE}${p}`;
+}
+
 /** Link the phone camera can actually open. Never encode localhost.
  * Use a path (not ?query) — many phone cameras drop the query string. */
 
@@ -30,12 +41,13 @@ export async function phoneUrl(pathAndQuery: string): Promise<string> {
   return `${origin}${pathAndQuery}`;
 }
 
-/** QR: usar o site que o anfitrião já tem aberto — nunca um túnel antigo do servidor. */
-export function liveInviteUrl(serverPublicUrl: string | undefined, path: string): string {
+/** QR: sempre o site HTTPS da Vercel — a câmara do telemóvel abre isto. */
+export function liveInviteUrl(_serverPublicUrl: string | undefined, path: string): string {
   const here = window.location.origin;
-  if (!isLoopbackHost(window.location.hostname)) return `${here}${path}`;
-  if (serverPublicUrl && !isLoopbackUrl(serverPublicUrl)) return `${new URL(serverPublicUrl).origin}${path}`;
-  return "";
+  if (/\.vercel\.app$/i.test(window.location.hostname) && window.location.protocol === "https:") {
+    return `${here}${path}`;
+  }
+  return publicInviteUrl(path);
 }
 
 export function isLoopbackHost(host: string): boolean {

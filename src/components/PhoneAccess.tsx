@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { COHORT_PIN } from "../data/cohort";
-import { fetchInviteOrigin, pcAppUrl } from "../lib/inviteUrl";
+import { PUBLIC_SITE, fetchInviteOrigin, pcAppUrl } from "../lib/inviteUrl";
 import { UI } from "../lib/i18n";
 import { useUiLang } from "../lib/ui-lang";
 
@@ -12,14 +12,13 @@ export function PhoneAccess() {
   const [copied, setCopied] = useState<"https" | "lan" | null>(null);
 
   useEffect(() => {
+    const pin = `/?pin=${encodeURIComponent(COHORT_PIN)}`;
+    setHttpsUrl(`${PUBLIC_SITE}${pin}`);
     let stop = false;
     async function load() {
       const data = await fetchInviteOrigin();
       if (stop || !data) return;
-      const pin = `/?pin=${encodeURIComponent(COHORT_PIN)}`;
-      const pub = (data.public || (data.https ? data.origin : "")).replace(/\/$/, "");
       const lan = (data.lan || "").replace(/\/$/, "");
-      setHttpsUrl(pub ? pub + pin : "");
       setLanUrl(lan ? lan + pin : "");
     }
     void load();

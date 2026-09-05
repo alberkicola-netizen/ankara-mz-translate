@@ -15,6 +15,7 @@ import {
 } from "./providers.mjs";
 import { configuredPublicOrigin, describeOrigin, lanOrigin, originFor } from "./origin.mjs";
 import { cardTranslate } from "./cardTranslate.mjs";
+import { createPairStore, joinPublicUrl, PUBLIC_SITE } from "./pairStore.mjs";
 
 export { originFor } from "./origin.mjs";
 
@@ -26,6 +27,7 @@ const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 /** @type {Map<string, Session>} */
 const sessions = new Map();
+const pairStore = createPairStore();
 
 /**
  * @typedef {Object} Participant
@@ -241,56 +243,101 @@ export function createApp() {
     return session;
   }
 
-  function sessionCreated(req, res, session) {
-    const origin = originFor(req);
+  function sessionCreated(_req, res, session) {
     res.json({
       code: session.code,
       token: session.a.token,
-      publicUrl: `${origin}/join/${session.code}`,
+      publicUrl: joinPublicUrl(session.code),
     });
   }
 
-  app.post("/api/session", (req, res) => {
+  async function persistPair(session) {
+    if (!pairStore) return;
+    try {
+      await pairStore.insert({
+        code: session.code,
+        status: session.status,
+        a_token: session.a.token,
+        a_lang: session.a.lang,
+        b_token: session.b?.token ?? null,
+        b_lang: session.b?.lang ?? null,
+        expires_at: new Date(session.expiresAt).toISOString(),
+      });
+    } catch (err) {
+      console.warn("[pair_sessions]", err?.message || err);
+    }
+  }
+
+  async function hydratePair(code) {
+    const live = getLive(code);
+    if (live) return live;
+    if (!pairStore) return null;
+    try {
+      const row = await pairStore.get(code);
+      if (!row) return null;
+      const session = {
+        code: row.code,
+        expiresAt: new Date(row.expires_at).getTime(),
+        status: row.status,
+        a: { token: row.a_token, lang: row.a_lang, ws: null },
+        b: row.b_token ? { token: row.b_token, lang: row.b_lang, ws: null } : null,
+        emptySince: null,
+      };
+      sessions.set(session.code, session);
+      return session;
+    } catch {
+      return null;
+    }
+  }
+
+  app.post("/api/session", async (req, res) => {
     const session = makeSession(req.body?.lang);
     if (!session) return res.status(400).json({ error: "bad lang" });
+    await persistPair(session);
     sessionCreated(req, res, session);
   });
 
   /** GET fallback — alguns túneis bloqueiam POST. Tem de ficar antes de /:code. */
-  app.get("/api/session/new", (req, res) => {
+  app.get("/api/session/new", async (req, res) => {
     const session = makeSession(req.query.lang);
     if (!session) return res.status(400).json({ error: "bad lang" });
+    await persistPair(session);
     sessionCreated(req, res, session);
   });
 
-  app.get("/api/session/:code", (req, res) => {
-    const s = getLive(req.params.code);
+  app.get("/api/session/:code", async (req, res) => {
+    const s = await hydratePair(req.params.code);
     if (!s) return res.status(404).json({ error: "not found" });
     res.json({ creatorLang: s.a.lang, status: s.status });
   });
 
   /** Phone-reachable origin for QR codes (never localhost). */
   app.get("/api/invite-origin", (req, res) => {
-    const origin = originFor(req);
     const lan = lanOrigin(req);
-    const pub = configuredPublicOrigin();
-    const info = describeOrigin(origin);
+    const info = describeOrigin(PUBLIC_SITE);
     res.json({
-      origin,
-      public: pub || (origin.startsWith("https:") ? origin : ""),
+      origin: PUBLIC_SITE,
+      public: PUBLIC_SITE,
       lan,
       ...info,
     });
   });
 
-  app.post("/api/session/:code/join", (req, res) => {
-    const s = getLive(req.params.code);
+  app.post("/api/session/:code/join", async (req, res) => {
+    const s = await hydratePair(req.params.code);
     if (!s) return res.status(404).json({ error: "not found" });
     const lang = req.body?.lang;
     if (!LANGS.has(lang)) return res.status(400).json({ error: "bad lang" });
     if (s.b) return res.status(409).json({ error: "session full" });
     s.b = { token: newToken(), lang, ws: null };
     s.status = "active";
+    if (pairStore) {
+      try {
+        await pairStore.join(s.code, lang, s.b.token);
+      } catch (err) {
+        console.warn("[pair_sessions join]", err?.message || err);
+      }
+    }
     send(s.a.ws, { type: "joined", lang });
     res.json({ token: s.b.token, creatorLang: s.a.lang });
   });
