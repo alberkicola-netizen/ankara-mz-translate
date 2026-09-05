@@ -227,9 +227,8 @@ export function createApp() {
     });
   }
 
-  app.post("/api/session", (req, res) => {
-    const lang = req.body?.lang;
-    if (!LANGS.has(lang)) return res.status(400).json({ error: "bad lang" });
+  function makeSession(lang) {
+    if (!LANGS.has(lang)) return null;
     const session = {
       code: newCode(),
       expiresAt: Date.now() + TTL_MS,
@@ -239,12 +238,29 @@ export function createApp() {
       emptySince: null,
     };
     sessions.set(session.code, session);
+    return session;
+  }
+
+  function sessionCreated(req, res, session) {
     const origin = originFor(req);
     res.json({
       code: session.code,
       token: session.a.token,
       publicUrl: `${origin}/join/${session.code}`,
     });
+  }
+
+  app.post("/api/session", (req, res) => {
+    const session = makeSession(req.body?.lang);
+    if (!session) return res.status(400).json({ error: "bad lang" });
+    sessionCreated(req, res, session);
+  });
+
+  /** GET fallback — alguns túneis bloqueiam POST. Tem de ficar antes de /:code. */
+  app.get("/api/session/new", (req, res) => {
+    const session = makeSession(req.query.lang);
+    if (!session) return res.status(400).json({ error: "bad lang" });
+    sessionCreated(req, res, session);
   });
 
   app.get("/api/session/:code", (req, res) => {

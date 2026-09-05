@@ -80,6 +80,7 @@ export const UI = {
     connStable: "Pronto",
     connOffline: "Pronto",
     connServerDown: "A traduzir pelos cartões aprovados.",
+    connServerOff: "Servidor desligado — neste PC corra npm start",
     generateFailed:
       "O QR não foi criado. Neste computador abra http://127.0.0.1:8787 e toque outra vez em Gerar QR. No telemóvel, se vir «Tunnel website ahead», toque em Continue.",
     openOnThisPc: "Abrir neste PC (localhost)",
@@ -306,6 +307,7 @@ export const UI = {
     connStable: "Hazır",
     connOffline: "Hazır",
     connServerDown: "Onaylı kartlarla çeviri.",
+    connServerOff: "Sunucu kapalı — bu bilgisayarda npm start çalıştırın",
     generateFailed:
       "QR oluşturulamadı. Bu bilgisayarda http://127.0.0.1:8787 adresini açıp tekrar QR oluşturun. Telefonda «Tunnel website ahead» görürseniz önce Continue'a basın.",
     openOnThisPc: "Bu bilgisayarda aç (localhost)",
@@ -532,6 +534,7 @@ export const UI = {
     connStable: "Ready",
     connOffline: "Ready",
     connServerDown: "Translating with approved cards.",
+    connServerOff: "Server is off — on this PC run npm start",
     generateFailed:
       "The QR was not created. On this computer open http://127.0.0.1:8787 and tap Generate QR again. On the phone, if you see “Tunnel website ahead”, tap Continue first.",
     openOnThisPc: "Open on this PC (localhost)",

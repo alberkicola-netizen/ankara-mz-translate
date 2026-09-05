@@ -22,6 +22,7 @@ import {
 } from "../lib/inviteUrl";
 import { InviteShare } from "../components/InviteShare";
 import { COHORT_PIN } from "../data/cohort";
+import { getApi } from "../lib/net";
 import type { SessionLang } from "../types";
 
 export function RoomNew() {
@@ -46,8 +47,13 @@ export function RoomNew() {
       return;
     }
     void fetchInviteOrigin().then(setOrigin);
+    void getApi("/api/rooms-meta")
+      .then((r) => {
+        if (!r.ok) setError(ui.connServerOff);
+      })
+      .catch(() => setError(ui.connServerOff));
     return () => connRef.current?.close();
-  }, []);
+  }, [ui.connServerOff]);
 
   async function create() {
     setBusy(true);

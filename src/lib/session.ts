@@ -1,5 +1,5 @@
 import type { SessionLang } from "../types";
-import { apiFetch, postApi, postApiJson } from "./net";
+import { apiFetch, getApi, postApi, postApiJson } from "./net";
 
 export const SESSION_LANGS: SessionLang[] = ["pt", "pt-BR", "pt-PT", "pt-AO", "tr", "en", "fr"];
 
@@ -51,7 +51,15 @@ export function clearCreds(): void {
 }
 
 export async function createSession(lang: SessionLang): Promise<{ code: string; token: string; publicUrl?: string }> {
-  const data = await postApiJson<{ code?: string; token?: string; publicUrl?: string }>("/api/session", { lang });
+  try {
+    const data = await postApiJson<{ code?: string; token?: string; publicUrl?: string }>("/api/session", { lang });
+    if (data.code && data.token) return { code: data.code, token: data.token, publicUrl: data.publicUrl };
+  } catch {
+    /* alguns túneis bloqueiam POST — tenta GET */
+  }
+  const res = await getApi(`/api/session/new?lang=${encodeURIComponent(lang)}`);
+  if (!res.ok) throw new Error(`create: HTTP ${res.status}`);
+  const data = (await res.json()) as { code?: string; token?: string; publicUrl?: string };
   if (!data.code || !data.token) throw new Error("create: bad payload");
   return { code: data.code, token: data.token, publicUrl: data.publicUrl };
 }

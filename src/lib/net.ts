@@ -97,6 +97,24 @@ export async function postApiJson<T>(path: string, body: unknown): Promise<T> {
   }
 }
 
+export async function getApi(path: string): Promise<Response> {
+  let last: unknown;
+  for (const base of apiBases()) {
+    try {
+      const res = await apiFetch(`${base}${path}`, { timeoutMs: 8_000, retries: 1 });
+      const ctype = res.headers.get("content-type") || "";
+      if (/html/i.test(ctype)) {
+        last = new Error("not-json");
+        continue;
+      }
+      return res;
+    } catch (err) {
+      last = err;
+    }
+  }
+  throw last instanceof Error ? last : new Error("network");
+}
+
 export function classifyNetworkError(err: unknown, ui: { offlineErr: string; generateFailed: string; connServerDown: string }): string {
   if (err instanceof Error && err.message === "not-configured") return err.message;
   const msg = err instanceof Error ? err.message : "";

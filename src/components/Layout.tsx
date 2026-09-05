@@ -2,10 +2,14 @@ import { NavLink, Outlet } from "react-router-dom";
 import { UI } from "../lib/i18n";
 import { useUiLang } from "../lib/ui-lang";
 import { LangMenu } from "./LangMenu";
+import { useServerReachable } from "../lib/net";
+import { isLoopbackHost } from "../lib/inviteUrl";
 
 export function Layout() {
   const { lang } = useUiLang();
   const ui = UI[lang];
+  const loopback = isLoopbackHost(window.location.hostname);
+  const serverUp = useServerReachable();
 
   const side = [
     { to: "/", label: ui.home, icon: "🏠", end: true },
@@ -50,9 +54,9 @@ export function Layout() {
             <span className="lp-mark uni">ANKARA UNIVERSITY</span>
             <span className="lp-mark app">{ui.brandName}</span>
           </div>
-          <span className="conn">
+          <span className={loopback && !serverUp ? "conn off" : "conn"}>
             <span className="dot" />
-            {ui.connStable}
+            {loopback && !serverUp ? ui.connServerOff : ui.connStable}
           </span>
           <LangMenu />
           <NavLink to="/more" className="iconbtn" aria-label={ui.settings}>

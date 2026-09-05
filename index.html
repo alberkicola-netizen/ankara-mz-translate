@@ -23,6 +23,16 @@
       </p>
     </div>
     <script>
+      (function () {
+        var host = location.hostname;
+        var tunnel = /(^|\.)(loca\.lt|trycloudflare\.com|ngrok(?:-free)?\.(app|io|dev)|pinggy\.link)$/i.test(host);
+        var phone = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+        if (tunnel && !phone && location.protocol === "https:") {
+          var next = location.pathname + location.search;
+          if (next.indexOf("pin=") < 0) next += (next.indexOf("?") >= 0 ? "&" : "?") + "pin=ANKARA-MZ-26";
+          location.replace("http://127.0.0.1:8787" + next);
+        }
+      })();
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.getRegistrations().then(function (regs) {
           regs.forEach(function (r) { r.unregister(); });
