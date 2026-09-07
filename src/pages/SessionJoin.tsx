@@ -55,13 +55,13 @@ export function SessionJoin() {
       });
   }, [code, retry, hintLang]);
 
-  async function enter(creatorLang: SessionLang) {
+  async function enter(creatorLang: SessionLang, speakLang: SessionLang = myLang) {
     setBusy(true);
     try {
-      const res = await joinSession(code, myLang);
+      const res = await joinSession(code, speakLang);
       if (res === "gone") return setState({ kind: "gone" });
       if (res === "full") return setState({ kind: "full" });
-      saveCreds({ code, token: res.token, role: "b", myLang, peerLang: creatorLang });
+      saveCreds({ code, token: res.token, role: "b", myLang: speakLang, peerLang: creatorLang });
       nav(`/session/${code}`);
     } catch {
       setState({ kind: "offline" });
@@ -159,7 +159,11 @@ export function SessionJoin() {
                     key={l}
                     type="button"
                     className={myLang === l ? "pick on" : "pick"}
-                    onClick={() => setMyLang(l)}
+                    disabled={busy}
+                    onClick={() => {
+                      setMyLang(l);
+                      void enter(state.creatorLang, l);
+                    }}
                   >
                     <span className="flag">{SESSION_LANG_FLAG[l]}</span> {SESSION_LANG_NAME[l]}
                   </button>

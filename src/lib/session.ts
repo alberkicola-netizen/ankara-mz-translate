@@ -187,64 +187,208 @@ export type SessionConnection = {
   close: () => void;
 };
 
-/** Realtime na Vercel/telemóvel; WebSocket só no servidor local. */
-export function connectSession(opts: {
+type ConnectOpts = {
   code: string;
   token: string;
+  role?: "a" | "b";
+  lang?: SessionLang;
   onMessage: (msg: WsMsg) => void;
   onConnected: () => void;
   onDisconnected: () => void;
-}): SessionConnection {
-  if (supabase) return connectSessionRealtime(opts);
-  return connectSessionWs(opts);
+};
+
+type PresenceMeta = { token: string; role?: "a" | "b"; lang?: SessionLang };
+
+type LiveHub = {
+  send: (msg: WsMsg) => void;
+  destroy: () => void;
+  attach: (opts: ConnectOpts) => void;
+  connected: boolean;
+  refs: number;
+};
+
+const liveHubs = new Map<string, LiveHub>();
+const destroyTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function hubKey(code: string, token: string): string {
+  return `${String(code).toUpperCase()}:${token}`;
 }
 
-function connectSessionRealtime(opts: {
-  code: string;
-  token: string;
-  onMessage: (msg: WsMsg) => void;
-  onConnected: () => void;
-  onDisconnected: () => void;
-}): SessionConnection {
-  let closed = false;
-  const topic = `session:${opts.code.toUpperCase()}`;
-  const ch = supabase!.channel(topic, { config: { broadcast: { ack: false } } });
-  ch.on("broadcast", { event: "sig" }, ({ payload }) => {
-    const msg = payload as WsMsg & { token?: string };
-    if (!msg || msg.token === opts.token) return;
-    const { token: _t, ...rest } = msg as WsMsg & { token?: string };
-    if (rest.type === "pong" || rest.type === "ping") return;
-    opts.onMessage(rest);
-  });
-  ch.subscribe((status) => {
-    if (closed) return;
-    if (status === "SUBSCRIBED") opts.onConnected();
-    if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") opts.onDisconnected();
-  });
+function retain(hub: LiveHub, key: string): void {
+  hub.refs += 1;
+  const t = destroyTimers.get(key);
+  if (t) {
+    clearTimeout(t);
+    destroyTimers.delete(key);
+  }
+}
+
+function release(hub: LiveHub, key: string): void {
+  hub.refs -= 1;
+  if (hub.refs > 0) return;
+  const prev = destroyTimers.get(key);
+  if (prev) clearTimeout(prev);
+  destroyTimers.set(
+    key,
+    setTimeout(() => {
+      destroyTimers.delete(key);
+      if (hub.refs > 0) return;
+      hub.destroy();
+      liveHubs.delete(key);
+    }, 80),
+  );
+}
+
+/** Realtime na Vercel/telemóvel; WebSocket só no servidor local. */
+export function connectSession(opts: ConnectOpts): SessionConnection {
+  const key = hubKey(opts.code, opts.token);
+  const existing = liveHubs.get(key);
+  if (existing) {
+    retain(existing, key);
+    existing.attach(opts);
+    return {
+      send: existing.send,
+      close: () => release(existing, key),
+    };
+  }
+  const hub = supabase ? connectSessionRealtime(opts) : connectSessionWs(opts);
+  hub.refs = 0;
+  liveHubs.set(key, hub);
+  retain(hub, key);
   return {
-    send: (msg) => {
-      if (closed) return;
-      void ch.send({ type: "broadcast", event: "sig", payload: { ...msg, token: opts.token } });
-    },
-    close: () => {
-      closed = true;
-      void supabase!.removeChannel(ch);
-    },
+    send: hub.send,
+    close: () => release(hub, key),
   };
 }
 
-function connectSessionWs(opts: {
-  code: string;
-  token: string;
-  onMessage: (msg: WsMsg) => void;
-  onConnected: () => void;
-  onDisconnected: () => void;
-}): SessionConnection {
+function connectSessionRealtime(opts: ConnectOpts): LiveHub {
+  let closed = false;
+  let connected = false;
+  let peerSeen = false;
+  let listeners: ConnectOpts = opts;
+  let announceTimer: ReturnType<typeof setInterval> | undefined;
+  const topic = `session:${opts.code.toUpperCase()}`;
+  const ch = supabase!.channel(topic, {
+    config: {
+      private: false,
+      broadcast: { ack: true, self: false },
+      presence: { key: opts.token },
+    },
+  });
+
+  function emit(msg: WsMsg) {
+    if (closed) return;
+    listeners.onMessage(msg);
+  }
+
+  function meta(): PresenceMeta {
+    return { token: listeners.token, role: listeners.role, lang: listeners.lang };
+  }
+
+  function announce() {
+    if (closed || peerSeen || !listeners.lang) return;
+    void ch.send({
+      type: "broadcast",
+      event: "sig",
+      payload: { type: "joined", lang: listeners.lang, token: listeners.token } satisfies WsMsg & { token: string },
+    });
+  }
+
+  function readPresence() {
+    if (closed) return;
+    const state = ch.presenceState<PresenceMeta>();
+    const others: PresenceMeta[] = [];
+    for (const [key, metas] of Object.entries(state)) {
+      const row = metas[0];
+      if (!row) continue;
+      if (key === listeners.token || row.token === listeners.token) continue;
+      others.push(row);
+    }
+    if (!others.length) {
+      if (peerSeen) {
+        peerSeen = false;
+        emit({ type: "peer", online: false });
+      }
+      return;
+    }
+    peerSeen = true;
+    if (announceTimer) {
+      clearInterval(announceTimer);
+      announceTimer = undefined;
+    }
+    const other = others[0];
+    if (other.lang) emit({ type: "joined", lang: other.lang });
+    emit({ type: "peer", online: true });
+  }
+
+  ch.on("broadcast", { event: "sig" }, ({ payload }) => {
+    const msg = payload as WsMsg & { token?: string };
+    if (!msg || msg.token === listeners.token) return;
+    const { token: _t, ...rest } = msg as WsMsg & { token?: string };
+    if (rest.type === "pong" || rest.type === "ping") return;
+    if (rest.type === "joined" || (rest.type === "peer" && rest.online)) {
+      peerSeen = true;
+      clearInterval(announceTimer);
+      announceTimer = undefined;
+    }
+    emit(rest);
+  });
+  ch.on("presence", { event: "sync" }, readPresence);
+  ch.on("presence", { event: "join" }, readPresence);
+  ch.on("presence", { event: "leave" }, readPresence);
+
+  ch.subscribe((status) => {
+    if (closed) return;
+    if (status === "SUBSCRIBED") {
+      connected = true;
+      void ch.track(meta());
+      listeners.onConnected();
+      announce();
+      if (!announceTimer) announceTimer = setInterval(announce, 1000);
+    }
+    if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+      connected = false;
+      listeners.onDisconnected();
+    }
+  });
+
+  const hub: LiveHub = {
+    refs: 0,
+    get connected() {
+      return connected;
+    },
+    send: (msg) => {
+      if (closed) return;
+      void ch.send({ type: "broadcast", event: "sig", payload: { ...msg, token: listeners.token } });
+    },
+    attach: (next) => {
+      listeners = next;
+      if (connected) {
+        void ch.track(meta());
+        next.onConnected();
+        announce();
+        readPresence();
+      }
+    },
+    destroy: () => {
+      closed = true;
+      connected = false;
+      clearInterval(announceTimer);
+      announceTimer = undefined;
+      void supabase!.removeChannel(ch);
+    },
+  };
+  return hub;
+}
+
+function connectSessionWs(opts: ConnectOpts): LiveHub {
   let ws: WebSocket | null = null;
   let closed = false;
+  let connected = false;
   let attempt = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let beat: ReturnType<typeof setInterval> | undefined;
+  let listeners: ConnectOpts = opts;
 
   function stopBeat() {
     clearInterval(beat);
@@ -266,23 +410,25 @@ function connectSessionWs(opts: {
     );
     ws.onopen = () => {
       attempt = 0;
+      connected = true;
       startBeat();
-      opts.onConnected();
+      listeners.onConnected();
     };
     ws.onmessage = (ev) => {
       try {
         const msg = JSON.parse(String(ev.data)) as WsMsg;
         if (msg.type === "pong" || msg.type === "ping") return;
         if (msg.type === "end" || (msg.type === "error" && msg.error === "invalid session")) closed = true;
-        opts.onMessage(msg);
+        listeners.onMessage(msg);
       } catch {
         /* ignore malformed frames */
       }
     };
     ws.onclose = () => {
       ws = null;
+      connected = false;
       stopBeat();
-      opts.onDisconnected();
+      listeners.onDisconnected();
       if (!closed) {
         attempt += 1;
         timer = setTimeout(open, Math.min(15_000, 400 * 2 ** attempt));
@@ -301,11 +447,20 @@ function connectSessionWs(opts: {
   window.addEventListener("online", onOnline);
 
   return {
+    refs: 0,
+    get connected() {
+      return connected;
+    },
     send: (msg) => {
       if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
     },
-    close: () => {
+    attach: (next) => {
+      listeners = next;
+      if (connected) next.onConnected();
+    },
+    destroy: () => {
       closed = true;
+      connected = false;
       clearTimeout(timer);
       stopBeat();
       window.removeEventListener("online", onOnline);

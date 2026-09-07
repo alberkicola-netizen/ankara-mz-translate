@@ -31,7 +31,16 @@ export function SessionRoom() {
   const creds = loadCreds(code.toUpperCase());
 
   if (!creds) return <Navigate to={`/join/${code}`} replace />;
-  return <Room myLang={creds.myLang} initialPeerLang={creds.peerLang} code={creds.code} token={creds.token} ui={ui} />;
+  return (
+    <Room
+      myLang={creds.myLang}
+      initialPeerLang={creds.peerLang}
+      code={creds.code}
+      token={creds.token}
+      role={creds.role}
+      ui={ui}
+    />
+  );
 }
 
 function Room({
@@ -39,12 +48,14 @@ function Room({
   initialPeerLang,
   code,
   token,
+  role,
   ui,
 }: {
   myLang: SessionLang;
   initialPeerLang: SessionLang | null;
   code: string;
   token: string;
+  role: "a" | "b";
   ui: (typeof UI)[keyof typeof UI];
 }) {
   const [peerLang, setPeerLang] = useState<SessionLang | null>(initialPeerLang);
@@ -82,6 +93,8 @@ function Room({
     const conn = connectSession({
       code,
       token,
+      role,
+      lang: myLang,
       onMessage: handleMsg,
       onConnected: () => {
         setConnected(true);

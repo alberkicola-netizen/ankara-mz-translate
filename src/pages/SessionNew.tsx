@@ -37,6 +37,8 @@ export function SessionNew() {
   const [link, setLink] = useState("");
   const [origin, setOrigin] = useState<InviteOrigin | null>(null);
   const connRef = useRef<SessionConnection | null>(null);
+  const keepAliveRef = useRef(false);
+  const enteredRef = useRef(false);
 
   useEffect(() => {
     if (isTunnelHost(window.location.hostname) && !isPhoneBrowser()) {
@@ -52,8 +54,19 @@ export function SessionNew() {
         })
         .catch(() => setError(ui.connServerOff));
     }
-    return () => connRef.current?.close();
+    return () => {
+      if (!keepAliveRef.current) connRef.current?.close();
+    };
   }, [ui.connServerOff]);
+
+  function enterRoom(sessionCode: string, peerLang?: SessionLang | null) {
+    if (enteredRef.current) return;
+    enteredRef.current = true;
+    keepAliveRef.current = true;
+    const creds = loadCreds(sessionCode);
+    if (creds && peerLang) saveCreds({ ...creds, peerLang });
+    nav(`/session/${sessionCode}`);
+  }
 
   async function generate() {
     setBusy(true);
@@ -66,13 +79,11 @@ export function SessionNew() {
       connRef.current = connectSession({
         code: s.code,
         token: s.token,
+        role: "a",
+        lang: myLang,
         onMessage: (msg) => {
-          if (msg.type === "joined") {
-            const creds = loadCreds(s.code);
-            if (creds) saveCreds({ ...creds, peerLang: msg.lang });
-            connRef.current?.close();
-            nav(`/session/${s.code}`);
-          }
+          if (msg.type === "joined") enterRoom(s.code, msg.lang);
+          else if (msg.type === "peer" && msg.online) enterRoom(s.code, loadCreds(s.code)?.peerLang ?? null);
         },
         onConnected: () => undefined,
         onDisconnected: () => undefined,
