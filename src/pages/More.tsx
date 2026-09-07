@@ -9,15 +9,7 @@ export function More() {
   const nav = useNavigate();
 
   const items = [
-    { to: "/favorites", label: `⭐ ${ui.favorites}` },
-    { to: "/speech", label: `🗣️ ${ui.speech}` },
-    { to: "/history", label: `🕘 ${ui.history}` },
     { to: "/glossary", label: `📚 ${ui.glossary}` },
-    { to: "/invite", label: `🔗 ${ui.invite}` },
-    { to: "/training", label: `🎓 ${ui.training}` },
-    { to: "/evaluation", label: `📋 ${ui.evaluation}` },
-    { to: "/governance", label: `🏛️ ${ui.governance}` },
-    { to: "/safety", label: `🛡️ ${ui.safety}` },
     { to: "/about", label: `ℹ️ ${ui.about}` },
   ];
 

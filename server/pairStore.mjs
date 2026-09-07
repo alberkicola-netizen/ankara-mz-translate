@@ -33,7 +33,7 @@ function uuidToToken(id) {
 }
 
 export function createPairStore() {
-  const url = process.env.SUPABASE_URL;
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return null;
   const supa = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -74,18 +74,19 @@ export function createPairStore() {
         if (pair.data.expires_at && Date.now() > new Date(pair.data.expires_at).getTime()) return null;
         return pair.data;
       }
-      const room = unwrap(await supa.from("rooms").select("*").eq("id", id).maybeSingle());
-      if (!room) return null;
+      const roomRes = await supa.from("rooms").select("*").eq("id", id).maybeSingle();
+      if (roomRes.error || !roomRes.data) return null;
+      const room = roomRes.data;
       if (room.expires_at && Date.now() > new Date(room.expires_at).getTime()) return null;
-      const people = unwrap(await supa.from("participants").select("*").eq("room_id", id).order("joined_at"));
-      const a = people?.[0];
-      const b = people?.[1];
-      if (!a) return null;
+      const peopleRes = await supa.from("participants").select("*").eq("room_id", id).order("joined_at");
+      const people = peopleRes.error ? [] : peopleRes.data || [];
+      const a = people[0];
+      const b = people[1];
       return {
         code: id,
         status: b ? "active" : "waiting",
-        a_token: uuidToToken(a.id),
-        a_lang: a.source_language,
+        a_token: a ? uuidToToken(a.id) : "",
+        a_lang: a?.source_language || "pt",
         b_token: b ? uuidToToken(b.id) : null,
         b_lang: b?.source_language ?? null,
         expires_at: room.expires_at,

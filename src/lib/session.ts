@@ -3,7 +3,7 @@ import { apiFetch, getApi, postApi, postApiJson } from "./net";
 import { supabase } from "./supabaseClient";
 import { cloudCreate, cloudGet, cloudJoin, cloudSessionsEnabled } from "./pairCloud";
 
-export const SESSION_LANGS: SessionLang[] = ["pt", "pt-BR", "pt-PT", "pt-AO", "tr", "en", "fr"];
+export const SESSION_LANGS: SessionLang[] = ["pt", "tr", "en"];
 
 export const SESSION_LANG_NAME: Record<SessionLang, string> = {
   pt: "Português (Moçambique)",
@@ -53,20 +53,22 @@ export function clearCreds(): void {
 }
 
 export async function createSession(lang: SessionLang): Promise<{ code: string; token: string; publicUrl?: string }> {
+  try {
+    const data = await postApiJson<{ code?: string; token?: string; publicUrl?: string }>("/api/session", { lang });
+    if (data.code && data.token) return { code: data.code, token: data.token, publicUrl: data.publicUrl };
+  } catch {
+    /* nuvem / GET */
+  }
   if (cloudSessionsEnabled()) {
     try {
       const cloud = await cloudCreate(lang);
       if (cloud) return cloud;
     } catch {
-      /* API / memória */
+      /* GET local */
     }
   }
-  try {
-    const data = await postApiJson<{ code?: string; token?: string; publicUrl?: string }>("/api/session", { lang });
-    if (data.code && data.token) return { code: data.code, token: data.token, publicUrl: data.publicUrl };
-  } catch {
-    /* alguns túneis bloqueiam POST — tenta GET */
-  }
+  const onVercel = typeof location !== "undefined" && /\.vercel\.app$/i.test(location.hostname);
+  if (onVercel) throw new Error("create: HTTP 503");
   const res = await getApi(`/api/session/new?lang=${encodeURIComponent(lang)}`);
   if (!res.ok) throw new Error(`create: HTTP ${res.status}`);
   const data = (await res.json()) as { code?: string; token?: string; publicUrl?: string };
@@ -75,38 +77,57 @@ export async function createSession(lang: SessionLang): Promise<{ code: string; 
 }
 
 export async function getSession(code: string): Promise<{ creatorLang: SessionLang; status: string } | null> {
+  const id = code.trim().toUpperCase();
+  let lookupErr: Error | null = null;
+  try {
+    const res = await apiFetch(`/api/session/${encodeURIComponent(id)}`, { retries: 1, timeoutMs: 10_000 });
+    const ctype = res.headers.get("content-type") || "";
+    if (res.ok && /json/i.test(ctype)) {
+      return (await res.json()) as { creatorLang: SessionLang; status: string };
+    }
+    if (res.status !== 404) lookupErr = new Error(`get: HTTP ${res.status}`);
+  } catch (err) {
+    lookupErr = err instanceof Error ? err : new Error("network");
+  }
   if (cloudSessionsEnabled()) {
     try {
-      const cloud = await cloudGet(code);
+      const cloud = await cloudGet(id);
       if (cloud) return cloud;
     } catch {
-      /* API */
+      /* not found */
     }
   }
-  const res = await apiFetch(`/api/session/${encodeURIComponent(code)}`, { retries: 1 });
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`get: HTTP ${res.status}`);
-  return (await res.json()) as { creatorLang: SessionLang; status: string };
+  if (lookupErr) throw lookupErr;
+  return null;
 }
 
 export async function joinSession(
   code: string,
   lang: SessionLang,
 ): Promise<{ token: string; creatorLang: SessionLang } | "full" | "gone"> {
-  if (cloudSessionsEnabled()) {
-    try {
-      const cloud = await cloudJoin(code, lang);
+  try {
+    const res = await postApi(`/api/session/${encodeURIComponent(code)}/join`, { lang });
+    if (res.status === 409) return "full";
+    if (res.status === 404) {
+      /* nuvem */
+    } else {
+      if (!res.ok) throw new Error(`join: HTTP ${res.status}`);
+      return (await res.json()) as { token: string; creatorLang: SessionLang };
+    }
+  } catch (err) {
+    if (cloudSessionsEnabled()) {
+      const cloud = await cloudJoin(code, lang).catch(() => null);
       if (cloud === "full" || cloud === "gone") return cloud;
       if (cloud) return cloud;
-    } catch {
-      /* API */
     }
+    throw err instanceof Error ? err : new Error("join");
   }
-  const res = await postApi(`/api/session/${encodeURIComponent(code)}/join`, { lang });
-  if (res.status === 409) return "full";
-  if (res.status === 404) return "gone";
-  if (!res.ok) throw new Error(`join: HTTP ${res.status}`);
-  return (await res.json()) as { token: string; creatorLang: SessionLang };
+  if (cloudSessionsEnabled()) {
+    const cloud = await cloudJoin(code, lang);
+    if (cloud === "full" || cloud === "gone") return cloud;
+    if (cloud) return cloud;
+  }
+  return "gone";
 }
 
 export type WsMsg =

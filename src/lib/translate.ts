@@ -77,15 +77,15 @@ export async function machineTranslate(text: string, from: SessionLang, to: Sess
   if (hit) return hit;
 
   const card = cardTranslate(text, from, to);
-  if (card && card.match >= 0.95) return remember(key, card);
+  if (card) return remember(key, card);
 
   try {
     const res = await apiFetch("/api/translate", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ text, from, to }),
-      timeoutMs: 12_000,
-      retries: 1,
+      timeoutMs: 8_000,
+      retries: 0,
     });
     if (res.status === 503) {
       const mm = await myMemoryTranslate(text, from, to).catch(() => null);

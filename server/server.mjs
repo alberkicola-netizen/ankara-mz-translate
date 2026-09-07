@@ -96,7 +96,11 @@ setInterval(() => {
 function realTranslator() {
   const { OPENROUTER_API_KEY, OPENROUTER_MODEL } = process.env;
   return OPENROUTER_API_KEY
-    ? createOpenRouterTranslator({ apiKey: OPENROUTER_API_KEY, model: OPENROUTER_MODEL || "openai/gpt-4o-mini" })
+    ? createOpenRouterTranslator({
+        apiKey: OPENROUTER_API_KEY,
+        model: OPENROUTER_MODEL || "openai/gpt-4o-mini",
+        timeoutMs: 8_000,
+      })
     : null;
 }
 
@@ -109,8 +113,8 @@ function realTts() {
 
 /** Salas multi-participante (Supabase). Devolve null se o .env não estiver configurado. */
 function roomsSetup(translate) {
-  const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, STT_API_KEY, STT_API_URL, STT_MODEL, OPENROUTER_API_KEY } =
-    process.env;
+  const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const { SUPABASE_SERVICE_ROLE_KEY, STT_API_KEY, STT_API_URL, STT_MODEL, OPENROUTER_API_KEY } = process.env;
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
   const store = createSupaStore({ url: SUPABASE_URL, serviceRoleKey: SUPABASE_SERVICE_ROLE_KEY });
   const sttKey = STT_API_KEY || OPENROUTER_API_KEY;
@@ -252,7 +256,13 @@ export function createApp() {
   }
 
   async function persistPair(session) {
-    if (!pairStore) return;
+    if (!pairStore) {
+      if (process.env.VERCEL) {
+        sessions.delete(session.code);
+        throw Object.assign(new Error("store"), { status: 503 });
+      }
+      return;
+    }
     try {
       await pairStore.insert({
         code: session.code,
@@ -264,7 +274,9 @@ export function createApp() {
         expires_at: new Date(session.expiresAt).toISOString(),
       });
     } catch (err) {
+      sessions.delete(session.code);
       console.warn("[pair_sessions]", err?.message || err);
+      throw err;
     }
   }
 
@@ -290,19 +302,25 @@ export function createApp() {
     }
   }
 
-  app.post("/api/session", async (req, res) => {
-    const session = makeSession(req.body?.lang);
+  async function createPairHttp(req, res, lang) {
+    const session = makeSession(lang);
     if (!session) return res.status(400).json({ error: "bad lang" });
-    await persistPair(session);
-    sessionCreated(req, res, session);
+    try {
+      await persistPair(session);
+    } catch (err) {
+      const status = err?.status || 500;
+      return res.status(status).json({ error: err instanceof Error ? err.message : "create failed" });
+    }
+    return sessionCreated(req, res, session);
+  }
+
+  app.post("/api/session", async (req, res) => {
+    await createPairHttp(req, res, req.body?.lang);
   });
 
   /** GET fallback — alguns túneis bloqueiam POST. Tem de ficar antes de /:code. */
   app.get("/api/session/new", async (req, res) => {
-    const session = makeSession(req.query.lang);
-    if (!session) return res.status(400).json({ error: "bad lang" });
-    await persistPair(session);
-    sessionCreated(req, res, session);
+    await createPairHttp(req, res, req.query.lang);
   });
 
   app.get("/api/session/:code", async (req, res) => {

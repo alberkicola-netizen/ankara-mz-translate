@@ -86,13 +86,13 @@ export async function cloudGet(
   if (room.error || !room.data) return null;
   if (room.data.expires_at && Date.now() > new Date(room.data.expires_at).getTime()) return null;
   const people = await supabase.from("participants").select("*").eq("room_id", id).order("joined_at");
-  const list = people.data || [];
+  const list = people.error ? [] : people.data || [];
   const a = list[0];
-  if (!a) return null;
+  const b = list[1];
   return {
-    creatorLang: a.source_language as SessionLang,
-    status: list[1] ? "active" : "waiting",
-    peerLang: list[1] ? (list[1].source_language as SessionLang) : null,
+    creatorLang: (a?.source_language as SessionLang) || "pt",
+    status: b ? "active" : "waiting",
+    peerLang: b ? (b.source_language as SessionLang) : null,
   };
 }
 
@@ -102,7 +102,7 @@ export async function cloudJoin(
 ): Promise<{ token: string; creatorLang: SessionLang } | "full" | "gone" | null> {
   if (!supabase || !LANGS.has(lang)) return null;
   const found = await cloudGet(code);
-  if (!found) return "gone";
+  if (!found) return null;
   if (found.status === "active") return "full";
   const token = newToken();
   const pair = await supabase
@@ -119,7 +119,7 @@ export async function cloudJoin(
     target_language: lang,
   });
   if (person.error) {
-    if (/duplicate|23505|row-level|42501|permission/i.test(person.error.message)) return "gone";
+    if (/duplicate|23505|row-level|42501|permission|RLS/i.test(person.error.message)) return null;
     throw new Error(person.error.message);
   }
   return { token, creatorLang: found.creatorLang };

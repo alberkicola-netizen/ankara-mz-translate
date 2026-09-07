@@ -14,16 +14,9 @@ export function Layout() {
   const side = [
     { to: "/", label: ui.home, icon: "🏠", end: true },
     { to: "/session/new", label: ui.createSession, icon: "📱" },
-    { to: "/room/new", label: ui.createRoom, icon: "👥" },
     { to: "/join", label: ui.joinTitle, icon: "🔢" },
     { to: "/live", label: ui.liveNav, icon: "🎙️" },
-    { to: "/speech", label: ui.speech, icon: "🗣️" },
-    { to: "/search", label: ui.searchNav, icon: "🔍" },
-    { to: "/favorites", label: ui.favorites, icon: "⭐" },
     { to: "/glossary", label: ui.glossary, icon: "📚" },
-    { to: "/history", label: ui.history, icon: "🕘" },
-    { to: "/invite", label: ui.invite, icon: "🔗" },
-    { to: "/about", label: ui.about, icon: "ℹ️" },
     { to: "/more", label: ui.settings, icon: "⚙️" },
   ];
 
@@ -72,10 +65,10 @@ export function Layout() {
         <NavLink to="/" end>
           🏠 {ui.home}
         </NavLink>
+        <NavLink to="/session/new">📱 {ui.createSession.split(" ")[0]}</NavLink>
         <NavLink to="/live">🎙️ {ui.live}</NavLink>
-        <NavLink to="/search">🔍 {ui.searchNav}</NavLink>
-        <NavLink to="/glossary">📚 {ui.glossary.split(" ")[0]}</NavLink>
-        <NavLink to="/more">⚙️ ···</NavLink>
+        <NavLink to="/join">🔢 {ui.enterSession.split(" ")[0]}</NavLink>
+        <NavLink to="/more">⚙️ {ui.settings}</NavLink>
       </nav>
     </div>
   );

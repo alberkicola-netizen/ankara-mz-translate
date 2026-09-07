@@ -1,7 +1,14 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
-  ]
+  ],
+  "functions": {
+    "api/translate.mjs": {
+      "includeFiles": "src/data/phrases.json"
+    },
+    "api/[...path].mjs": {
+      "includeFiles": "src/data/phrases.json"
+    }
+  }
 }

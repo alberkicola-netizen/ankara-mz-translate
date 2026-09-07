@@ -3,10 +3,12 @@ import { CATEGORIES, PHRASES } from "../data/phrases";
 import { UI } from "../lib/i18n";
 import { useUiLang } from "../lib/ui-lang";
 import { PhoneAccess } from "../components/PhoneAccess";
+import { isLoopbackHost } from "../lib/inviteUrl";
 
 export function Home() {
   const { lang } = useUiLang();
   const ui = UI[lang];
+  const showPhoneBox = isLoopbackHost(window.location.hostname);
 
   return (
     <div className="home-dash">
@@ -21,7 +23,7 @@ export function Home() {
         </Link>
       </section>
 
-      <PhoneAccess />
+      {showPhoneBox ? <PhoneAccess /> : null}
 
       <section className="lp-features in-app" aria-label={ui.startTranslation}>
         <article className="lp-card">
@@ -42,33 +44,12 @@ export function Home() {
           </Link>
         </article>
 
-        <article className="lp-card">
-          <div className="lp-card-icon green" aria-hidden>
-            👪
-          </div>
-          <h2>{ui.cardGroupTitle}</h2>
-          <p>{ui.cardGroupText}</p>
-          <div className="lp-graphic group" aria-hidden>
-            <span className="avatar a">1</span>
-            <span className="avatar b">2</span>
-            <span className="avatar c">3</span>
-            <span className="avatar d">4</span>
-            <span className="plus">+</span>
-          </div>
-          <Link className="btn lp-ghost" to="/room/new">
-            {ui.createRoomCta} →
-          </Link>
-        </article>
-
         <article className="lp-card qr">
           <h2>{ui.cardQrTitle}</h2>
           <p>{ui.cardQrHint}</p>
           <p className="muted">{ui.codeExplainer}</p>
           <Link className="btn lp-ghost" to="/join">
             {ui.scanQr} →
-          </Link>
-          <Link className="btn lp-ghost" to="/join-room" style={{ marginTop: "0.45rem" }}>
-            {ui.joinRoomTitle} →
           </Link>
         </article>
       </section>

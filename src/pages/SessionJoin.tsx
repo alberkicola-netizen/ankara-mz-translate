@@ -16,6 +16,7 @@ type State =
   | { kind: "code" }
   | { kind: "loading" }
   | { kind: "gone" }
+  | { kind: "offline" }
   | { kind: "full" }
   | { kind: "ready"; creatorLang: SessionLang };
 
@@ -29,6 +30,7 @@ export function SessionJoin() {
   const [state, setState] = useState<State>(code ? { kind: "loading" } : { kind: "code" });
   const [myLang, setMyLang] = useState<SessionLang>(lang);
   const [busy, setBusy] = useState(false);
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
     if (!code) {
@@ -38,21 +40,26 @@ export function SessionJoin() {
     setState({ kind: "loading" });
     getSession(code)
       .then((s) => {
-        if (!s) setState({ kind: "gone" });
+        if (!s || s.status === "ended") setState({ kind: "gone" });
         else if (s.status === "active") setState({ kind: "full" });
-        else setState({ kind: "ready", creatorLang: s.creatorLang });
+        else setState({ kind: "ready", creatorLang: s.creatorLang || "pt" });
       })
-      .catch(() => setState({ kind: "gone" }));
-  }, [code]);
+      .catch(() => setState({ kind: "offline" }));
+  }, [code, retry]);
 
   async function enter(creatorLang: SessionLang) {
     setBusy(true);
-    const res = await joinSession(code, myLang).catch(() => "gone" as const);
-    setBusy(false);
-    if (res === "gone") return setState({ kind: "gone" });
-    if (res === "full") return setState({ kind: "full" });
-    saveCreds({ code, token: res.token, role: "b", myLang, peerLang: creatorLang });
-    nav(`/session/${code}`);
+    try {
+      const res = await joinSession(code, myLang);
+      if (res === "gone") return setState({ kind: "gone" });
+      if (res === "full") return setState({ kind: "full" });
+      saveCreds({ code, token: res.token, role: "b", myLang, peerLang: creatorLang });
+      nav(`/session/${code}`);
+    } catch {
+      setState({ kind: "offline" });
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -114,6 +121,15 @@ export function SessionJoin() {
               <Link className="btn wide" to="/join" style={{ display: "block", textAlign: "center" }}>
                 {ui.typeCodeHint}
               </Link>
+            </>
+          ) : null}
+
+          {state.kind === "offline" ? (
+            <>
+              <p className="warn">{ui.sessionOffline}</p>
+              <button className="btn primary wide" type="button" onClick={() => setRetry((n) => n + 1)}>
+                {ui.enterSession}
+              </button>
             </>
           ) : null}
 
