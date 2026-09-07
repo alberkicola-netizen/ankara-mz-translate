@@ -2,7 +2,7 @@ import type { SessionLang } from "../types";
 import { PUBLIC_SITE } from "./inviteUrl";
 import { apiFetch, getApi, postApi } from "./net";
 import { supabase } from "./supabaseClient";
-import { cloudCreate, cloudGet, cloudJoin, cloudSessionsEnabled } from "./pairCloud";
+import { cloudCreate, cloudGet, cloudJoin, cloudSessionsEnabled, publishJoinBeacon } from "./pairCloud";
 
 const CODE_ALPH = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
@@ -78,6 +78,14 @@ export function clearCreds(): void {
   sessionStorage.removeItem(CREDS_KEY);
 }
 
+function finishCreate(
+  data: { code: string; token: string; publicUrl?: string },
+  lang: SessionLang,
+): { code: string; token: string; publicUrl?: string } {
+  void publishJoinBeacon(data.code, lang, "a");
+  return data;
+}
+
 export async function createSession(lang: SessionLang): Promise<{ code: string; token: string; publicUrl?: string }> {
   try {
     const res = await apiFetch("/api/session", {
@@ -90,7 +98,7 @@ export async function createSession(lang: SessionLang): Promise<{ code: string; 
     const ctype = res.headers.get("content-type") || "";
     if (res.ok && /json/i.test(ctype)) {
       const data = (await res.json()) as { code?: string; token?: string; publicUrl?: string };
-      if (data.code && data.token) return { code: data.code, token: data.token, publicUrl: data.publicUrl };
+      if (data.code && data.token) return finishCreate({ code: data.code, token: data.token, publicUrl: data.publicUrl }, lang);
     }
   } catch {
     /* nuvem / GET */
@@ -98,7 +106,7 @@ export async function createSession(lang: SessionLang): Promise<{ code: string; 
   if (cloudSessionsEnabled()) {
     try {
       const cloud = await cloudCreate(lang);
-      if (cloud) return cloud;
+      if (cloud) return finishCreate(cloud, lang);
     } catch {
       /* GET local */
     }
@@ -109,7 +117,7 @@ export async function createSession(lang: SessionLang): Promise<{ code: string; 
       const res = await getApi(`/api/session/new?lang=${encodeURIComponent(lang)}`);
       if (res.ok) {
         const data = (await res.json()) as { code?: string; token?: string; publicUrl?: string };
-        if (data.code && data.token) return { code: data.code, token: data.token, publicUrl: data.publicUrl };
+        if (data.code && data.token) return finishCreate({ code: data.code, token: data.token, publicUrl: data.publicUrl }, lang);
       }
     } catch {
       /* Realtime local */
@@ -117,7 +125,7 @@ export async function createSession(lang: SessionLang): Promise<{ code: string; 
   }
   const code = localCode();
   const token = localToken();
-  return { code, token, publicUrl: joinLink(code, lang) };
+  return finishCreate({ code, token, publicUrl: joinLink(code, lang) }, lang);
 }
 
 export async function getSession(code: string): Promise<{ creatorLang: SessionLang; status: string } | null> {
@@ -149,6 +157,10 @@ export async function joinSession(
   code: string,
   lang: SessionLang,
 ): Promise<{ token: string; creatorLang: SessionLang } | "full" | "gone"> {
+  const done = (out: { token: string; creatorLang: SessionLang }) => {
+    void publishJoinBeacon(code, lang, "b");
+    return out;
+  };
   try {
     const res = await postApi(`/api/session/${encodeURIComponent(code)}/join`, { lang });
     if (res.status === 409) return "full";
@@ -156,7 +168,7 @@ export async function joinSession(
       /* nuvem */
     } else {
       if (!res.ok) throw new Error(`join: HTTP ${res.status}`);
-      return (await res.json()) as { token: string; creatorLang: SessionLang };
+      return done((await res.json()) as { token: string; creatorLang: SessionLang });
     }
   } catch {
     /* nuvem / Realtime */
@@ -164,9 +176,9 @@ export async function joinSession(
   if (cloudSessionsEnabled()) {
     const cloud = await cloudJoin(code, lang).catch(() => null);
     if (cloud === "full") return cloud;
-    if (cloud && cloud !== "gone") return cloud;
+    if (cloud && cloud !== "gone") return done(cloud);
   }
-  if (isSessionCode(code)) return { token: localToken(), creatorLang: lang };
+  if (isSessionCode(code)) return done({ token: localToken(), creatorLang: lang });
   return "gone";
 }
 
@@ -261,6 +273,23 @@ export function connectSession(opts: ConnectOpts): SessionConnection {
   };
 }
 
+function realtimeHttpBroadcast(topic: string, payload: unknown): void {
+  const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+  if (!url || !key) return;
+  void fetch(`${String(url).replace(/\/$/, "")}/realtime/v1/api/broadcast`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      apikey: key,
+      authorization: `Bearer ${key}`,
+    },
+    body: JSON.stringify({
+      messages: [{ topic, event: "sig", payload, private: false }],
+    }),
+  }).catch(() => undefined);
+}
+
 function connectSessionRealtime(opts: ConnectOpts): LiveHub {
   let closed = false;
   let connected = false;
@@ -271,10 +300,11 @@ function connectSessionRealtime(opts: ConnectOpts): LiveHub {
   const ch = supabase!.channel(topic, {
     config: {
       private: false,
-      broadcast: { ack: true, self: false },
+      broadcast: { ack: false, self: false },
       presence: { key: opts.token },
     },
   });
+  let presencePoll: ReturnType<typeof setInterval> | undefined;
 
   function emit(msg: WsMsg) {
     if (closed) return;
@@ -287,11 +317,10 @@ function connectSessionRealtime(opts: ConnectOpts): LiveHub {
 
   function announce() {
     if (closed || peerSeen || !listeners.lang) return;
-    void ch.send({
-      type: "broadcast",
-      event: "sig",
-      payload: { type: "joined", lang: listeners.lang, token: listeners.token } satisfies WsMsg & { token: string },
-    });
+    const payload = { type: "joined", lang: listeners.lang, token: listeners.token };
+    void ch.send({ type: "broadcast", event: "sig", payload });
+    realtimeHttpBroadcast(ch.topic, payload);
+    realtimeHttpBroadcast(topic, payload);
   }
 
   function readPresence() {
@@ -345,6 +374,7 @@ function connectSessionRealtime(opts: ConnectOpts): LiveHub {
       listeners.onConnected();
       announce();
       if (!announceTimer) announceTimer = setInterval(announce, 1000);
+      if (!presencePoll) presencePoll = setInterval(readPresence, 800);
     }
     if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
       connected = false;
@@ -359,7 +389,10 @@ function connectSessionRealtime(opts: ConnectOpts): LiveHub {
     },
     send: (msg) => {
       if (closed) return;
-      void ch.send({ type: "broadcast", event: "sig", payload: { ...msg, token: listeners.token } });
+      const payload = { ...msg, token: listeners.token };
+      void ch.send({ type: "broadcast", event: "sig", payload });
+      realtimeHttpBroadcast(ch.topic, payload);
+      realtimeHttpBroadcast(topic, payload);
     },
     attach: (next) => {
       listeners = next;
@@ -375,6 +408,8 @@ function connectSessionRealtime(opts: ConnectOpts): LiveHub {
       connected = false;
       clearInterval(announceTimer);
       announceTimer = undefined;
+      clearInterval(presencePoll);
+      presencePoll = undefined;
       void supabase!.removeChannel(ch);
     },
   };

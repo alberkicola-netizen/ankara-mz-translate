@@ -15,6 +15,9 @@ import {
   type WsMsg,
 } from "../lib/session";
 import type { SessionLang } from "../types";
+import { publicInviteUrl } from "../lib/inviteUrl";
+import { InviteShare } from "../components/InviteShare";
+import { watchJoinBeacon } from "../lib/pairCloud";
 
 type Entry = { who: "me" | "peer"; original: string; translated: string };
 type Phase = "idle" | "listening" | "translating" | "ready" | "playing";
@@ -103,7 +106,12 @@ function Room({
       onDisconnected: () => setConnected(false),
     });
     connRef.current = conn;
+    const stopWatch = watchJoinBeacon(code, (lang) => {
+      updatePeerLang(lang);
+      setPeerOnline(true);
+    });
     return () => {
+      stopWatch();
       conn.close();
       recRef.current?.stop();
       stopSpeak();
@@ -258,6 +266,8 @@ function Room({
     setEnded(true);
   }
 
+  const inviteLink = publicInviteUrl(`/join/${encodeURIComponent(code.toUpperCase())}?lang=${encodeURIComponent(myLang)}`);
+  const showInvite = role === "a" && !peerOnline && !ended;
   const lastIncoming = entries.find((e) => e.who === "peer");
   const lastAudio = lastIncoming;
   const listening = phase === "listening";
@@ -292,7 +302,24 @@ function Room({
       </header>
 
       <div className="roombody roombody-dock">
-        {!peerOnline ? <p className="banner">{ui.waitOtherSpeak}</p> : null}
+        {showInvite ? (
+          <InviteShare
+            ui={ui}
+            title={ui.sessionReady}
+            hint={ui.scanQrHint}
+            code={code}
+            codeLabel={ui.sessionCode}
+            link={inviteLink}
+          />
+        ) : null}
+        {!peerOnline ? (
+          <p className="mic-label" style={{ textAlign: "center" }}>
+            {ui.waitingPeer}
+            <span className="waves" aria-hidden>
+              <i /><i /><i /><i /><i />
+            </span>
+          </p>
+        ) : null}
 
         <div className="idpanels">
           <section className={myInterim || listening ? "idcard speaking" : "idcard"}>

@@ -96,6 +96,81 @@ export async function cloudGet(
   };
 }
 
+export async function publishJoinBeacon(code: string, lang: SessionLang, role: "a" | "b"): Promise<void> {
+  if (!supabase || !LANGS.has(lang)) return;
+  const id = String(code || "").toUpperCase();
+  const expires = new Date(Date.now() + TTL_MS).toISOString();
+  try {
+    if (role === "b") {
+      await supabase.from("pair_sessions").update({ b_lang: lang, status: "active" }).eq("code", id);
+      const room = await supabase.from("rooms").upsert(
+        { id, status: "active", max_participants: 2, expires_at: expires },
+        { onConflict: "id" },
+      );
+      if (room.error) await supabase.from("rooms").update({ status: "active" }).eq("id", id);
+      await supabase.from("participants").insert({
+        id: tokenToUuid(newToken()),
+        room_id: id,
+        display_name: "B",
+        source_language: lang,
+        target_language: lang,
+      });
+      return;
+    }
+    await supabase.from("pair_sessions").upsert(
+      { code: id, status: "waiting", a_lang: lang, expires_at: expires },
+      { onConflict: "code" },
+    );
+    await supabase.from("rooms").upsert(
+      { id, status: "open", max_participants: 2, expires_at: expires },
+      { onConflict: "id" },
+    );
+  } catch {
+    /* beacon is best-effort */
+  }
+}
+
+export async function readJoinBeacon(
+  code: string,
+): Promise<{ peerLang: SessionLang } | null> {
+  if (!supabase) return null;
+  const id = String(code || "").toUpperCase();
+  const pair = await supabase.from("pair_sessions").select("status, b_lang").eq("code", id).maybeSingle();
+  if (!pair.error && pair.data?.status === "active" && pair.data.b_lang) {
+    return { peerLang: pair.data.b_lang as SessionLang };
+  }
+  const people = await supabase.from("participants").select("display_name, source_language").eq("room_id", id);
+  const b = (people.data || []).find((p) => p.display_name === "B");
+  if (b?.source_language) return { peerLang: b.source_language as SessionLang };
+  const room = await supabase.from("rooms").select("status").eq("id", id).maybeSingle();
+  const st = String(room.data?.status || "");
+  if (st === "active" || st === "paired") return { peerLang: "pt" };
+  return null;
+}
+
+export function watchJoinBeacon(code: string, onPeer: (lang: SessionLang) => void): () => void {
+  let stop = false;
+  let seen = false;
+  async function tick() {
+    if (stop || seen) return;
+    try {
+      const hit = await readJoinBeacon(code);
+      if (hit) {
+        seen = true;
+        onPeer(hit.peerLang);
+        return;
+      }
+    } catch {
+      /* keep polling */
+    }
+    if (!stop) window.setTimeout(() => void tick(), 900);
+  }
+  void tick();
+  return () => {
+    stop = true;
+  };
+}
+
 export async function cloudJoin(
   code: string,
   lang: SessionLang,
