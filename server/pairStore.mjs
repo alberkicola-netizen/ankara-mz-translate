@@ -35,7 +35,10 @@ function uuidToToken(id) {
 export function createPairStore() {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return null;
+  if (!url || !key) {
+    console.warn("[pair_store] missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+    return null;
+  }
   const supa = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 
   function unwrap({ data, error }) {

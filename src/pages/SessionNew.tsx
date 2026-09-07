@@ -62,7 +62,7 @@ export function SessionNew() {
       const s = await createSession(myLang);
       saveCreds({ code: s.code, token: s.token, role: "a", myLang, peerLang: null });
       setCode(s.code);
-      setLink(publicInviteUrl(`/join/${encodeURIComponent(s.code.toUpperCase())}`));
+      setLink(publicInviteUrl(`/join/${encodeURIComponent(s.code.toUpperCase())}?lang=${encodeURIComponent(myLang)}`));
       connRef.current = connectSession({
         code: s.code,
         token: s.token,

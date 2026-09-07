@@ -1,7 +1,33 @@
 import type { SessionLang } from "../types";
-import { apiFetch, getApi, postApi, postApiJson } from "./net";
+import { PUBLIC_SITE } from "./inviteUrl";
+import { apiFetch, getApi, postApi } from "./net";
 import { supabase } from "./supabaseClient";
 import { cloudCreate, cloudGet, cloudJoin, cloudSessionsEnabled } from "./pairCloud";
+
+const CODE_ALPH = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+export function isSessionCode(code: string): boolean {
+  return /^[A-HJ-NP-Z2-9]{6}$/.test(code.trim().toUpperCase());
+}
+
+function localCode(): string {
+  const buf = new Uint32Array(6);
+  crypto.getRandomValues(buf);
+  let code = "";
+  for (const n of buf) code += CODE_ALPH[n % CODE_ALPH.length];
+  return code;
+}
+
+function localToken(): string {
+  const buf = new Uint8Array(16);
+  crypto.getRandomValues(buf);
+  return [...buf].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function joinLink(code: string, lang?: SessionLang): string {
+  const q = lang ? `?lang=${encodeURIComponent(lang)}` : "";
+  return `${PUBLIC_SITE}/join/${code}${q}`;
+}
 
 export const SESSION_LANGS: SessionLang[] = ["pt", "tr", "en"];
 
@@ -54,8 +80,18 @@ export function clearCreds(): void {
 
 export async function createSession(lang: SessionLang): Promise<{ code: string; token: string; publicUrl?: string }> {
   try {
-    const data = await postApiJson<{ code?: string; token?: string; publicUrl?: string }>("/api/session", { lang });
-    if (data.code && data.token) return { code: data.code, token: data.token, publicUrl: data.publicUrl };
+    const res = await apiFetch("/api/session", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ lang }),
+      timeoutMs: 4_000,
+      retries: 0,
+    });
+    const ctype = res.headers.get("content-type") || "";
+    if (res.ok && /json/i.test(ctype)) {
+      const data = (await res.json()) as { code?: string; token?: string; publicUrl?: string };
+      if (data.code && data.token) return { code: data.code, token: data.token, publicUrl: data.publicUrl };
+    }
   } catch {
     /* nuvem / GET */
   }
@@ -68,12 +104,20 @@ export async function createSession(lang: SessionLang): Promise<{ code: string; 
     }
   }
   const onVercel = typeof location !== "undefined" && /\.vercel\.app$/i.test(location.hostname);
-  if (onVercel) throw new Error("create: HTTP 503");
-  const res = await getApi(`/api/session/new?lang=${encodeURIComponent(lang)}`);
-  if (!res.ok) throw new Error(`create: HTTP ${res.status}`);
-  const data = (await res.json()) as { code?: string; token?: string; publicUrl?: string };
-  if (!data.code || !data.token) throw new Error("create: bad payload");
-  return { code: data.code, token: data.token, publicUrl: data.publicUrl };
+  if (!onVercel) {
+    try {
+      const res = await getApi(`/api/session/new?lang=${encodeURIComponent(lang)}`);
+      if (res.ok) {
+        const data = (await res.json()) as { code?: string; token?: string; publicUrl?: string };
+        if (data.code && data.token) return { code: data.code, token: data.token, publicUrl: data.publicUrl };
+      }
+    } catch {
+      /* Realtime local */
+    }
+  }
+  const code = localCode();
+  const token = localToken();
+  return { code, token, publicUrl: joinLink(code, lang) };
 }
 
 export async function getSession(code: string): Promise<{ creatorLang: SessionLang; status: string } | null> {
@@ -114,19 +158,15 @@ export async function joinSession(
       if (!res.ok) throw new Error(`join: HTTP ${res.status}`);
       return (await res.json()) as { token: string; creatorLang: SessionLang };
     }
-  } catch (err) {
-    if (cloudSessionsEnabled()) {
-      const cloud = await cloudJoin(code, lang).catch(() => null);
-      if (cloud === "full" || cloud === "gone") return cloud;
-      if (cloud) return cloud;
-    }
-    throw err instanceof Error ? err : new Error("join");
+  } catch {
+    /* nuvem / Realtime */
   }
   if (cloudSessionsEnabled()) {
-    const cloud = await cloudJoin(code, lang);
-    if (cloud === "full" || cloud === "gone") return cloud;
-    if (cloud) return cloud;
+    const cloud = await cloudJoin(code, lang).catch(() => null);
+    if (cloud === "full") return cloud;
+    if (cloud && cloud !== "gone") return cloud;
   }
+  if (isSessionCode(code)) return { token: localToken(), creatorLang: lang };
   return "gone";
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { UI } from "../lib/i18n";
 import { useUiLang } from "../lib/ui-lang";
 import {
@@ -7,6 +7,7 @@ import {
   SESSION_LANG_FLAG,
   SESSION_LANG_NAME,
   getSession,
+  isSessionCode,
   joinSession,
   saveCreds,
 } from "../lib/session";
@@ -25,7 +26,9 @@ export function SessionJoin() {
   const ui = UI[lang];
   const nav = useNavigate();
   const { code: raw = "" } = useParams();
+  const [params] = useSearchParams();
   const code = raw.trim().toUpperCase();
+  const hintLang = (SESSION_LANGS.includes(params.get("lang") as SessionLang) ? params.get("lang") : lang) as SessionLang;
   const [typed, setTyped] = useState("");
   const [state, setState] = useState<State>(code ? { kind: "loading" } : { kind: "code" });
   const [myLang, setMyLang] = useState<SessionLang>(lang);
@@ -37,15 +40,20 @@ export function SessionJoin() {
       setState({ kind: "code" });
       return;
     }
-    setState({ kind: "loading" });
+    const optimistic = isSessionCode(code);
+    if (optimistic) setState({ kind: "ready", creatorLang: hintLang });
+    else setState({ kind: "loading" });
     getSession(code)
       .then((s) => {
-        if (!s || s.status === "ended") setState({ kind: "gone" });
-        else if (s.status === "active") setState({ kind: "full" });
-        else setState({ kind: "ready", creatorLang: s.creatorLang || "pt" });
+        if (s?.status === "ended") setState({ kind: "gone" });
+        else if (s?.status === "active") setState({ kind: "full" });
+        else if (s) setState({ kind: "ready", creatorLang: s.creatorLang || hintLang });
+        else if (!optimistic) setState({ kind: "gone" });
       })
-      .catch(() => setState({ kind: "offline" }));
-  }, [code, retry]);
+      .catch(() => {
+        if (!optimistic) setState({ kind: "offline" });
+      });
+  }, [code, retry, hintLang]);
 
   async function enter(creatorLang: SessionLang) {
     setBusy(true);
